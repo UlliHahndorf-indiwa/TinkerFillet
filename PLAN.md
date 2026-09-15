@@ -349,9 +349,25 @@ normal gerechnet, in der Oberfläche orange markiert. Neu anklicken belebt ihn.
 
 ---
 
-## Stufe 1 — Ebene Flächen
+## Stufe 1 — Ebene Flächen ✅ abgeschlossen
 
-Ziel: Quader, Platten und Prismen sind vollständig filletfähig.
+Ziel: Quader, Platten und Prismen sind vollständig filletfähig. **Erreicht.**
+
+Am laufenden Programm im Browser nachgewiesen:
+
+| Prüfung | Ergebnis |
+|---|---|
+| Würfel laden | 192 Dreiecke → 6 Flächen |
+| Prisma laden | 80 Dreiecke → 22 Flächen (20 Mantel + 2 Deckel) |
+| Klick auf Randkante des Prismas | **20 Segmente** in einem Zug ausgewählt |
+| Klick auf Facettenfuge (18° Knick) | nur sie selbst — korrekt unterhalb des Schwellwerts |
+| Fillet r=3,5 auf Würfelkante | Volumen 7947,114 gegen analytisch 7947,423 (rel. 4e-5) |
+| Fillet r=2 auf 20-Segment-Kette | gebaut, 80 → 716 Dreiecke |
+| Radius nachträglich ändern | Modell neu gerechnet, Volumen folgt |
+| Undo | Feature-Liste leer, 76 Dreiecke = unverrundetes Prisma |
+| STL-Export | 35884 Bytes, 716 Dreiecke, Länge exakt 84 + n·50 |
+
+Tests: 103 xUnit (Desktop-.NET) + 20 node (Kernel), alle grün.
 
 ### 1.1 Interop-Durchstich — zuerst, vor allem anderen
 

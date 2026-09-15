@@ -21,6 +21,29 @@ public sealed class TriangleSoup
         Positions = positions;
     }
 
+    /// <summary>
+    /// Expands an indexed mesh back into loose triangles.
+    ///
+    /// Needed on the way out: the CAD kernel tessellates into shared vertices,
+    /// while STL stores every triangle's corners separately.
+    /// </summary>
+    public static TriangleSoup FromIndexed(IReadOnlyList<double> vertexCoordinates, IReadOnlyList<int> indices)
+    {
+        if (indices.Count % 3 != 0)
+            throw new ArgumentException("expected 3 indices per triangle", nameof(indices));
+
+        var positions = new double[indices.Count * 3];
+        for (var corner = 0; corner < indices.Count; corner++)
+        {
+            var vertex = indices[corner];
+            positions[corner * 3] = vertexCoordinates[vertex * 3];
+            positions[corner * 3 + 1] = vertexCoordinates[vertex * 3 + 1];
+            positions[corner * 3 + 2] = vertexCoordinates[vertex * 3 + 2];
+        }
+
+        return new TriangleSoup(positions);
+    }
+
     public int TriangleCount => Positions.Length / 9;
 
     /// <summary>The nine coordinates of one triangle, without copying.</summary>

@@ -38,3 +38,6 @@ node_modules/
 # Stufe-1.1-Durchstich: Wegwerfcode, enthaelt ausserdem ein 22-MB-WASM.
 # Bleibt lokal liegen, gehoert nicht ins Repo.
 spike/
+
+# Generated sample models for manual trials (tools/make-test-stl.mjs).
+src/TinkerFillet.App/wwwroot/dev/
