@@ -1,0 +1,36 @@
+# .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+publish/
+*.user
+*.suo
+project.lock.json
+artifacts/
+
+# Test- und Analyse-Ausgaben
+[Tt]est[Rr]esult*/
+coverage*/
+*.trx
+
+# VS Code (Einstellungen, die geteilt werden sollen, gezielt wieder freigeben)
+.vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+
+# Playwright
+playwright-report/
+test-results/
+.playwright/
+
+# Betriebssystem
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Sollte nie entstehen (kein npm im Projekt) - falls doch, nicht einchecken
+node_modules/

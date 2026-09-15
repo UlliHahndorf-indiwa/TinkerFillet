@@ -1,0 +1,19 @@
+# Einheitliche Zeilenenden über macOS und Windows hinweg.
+# Ohne das erzeugt jeder Wechsel zwischen den Rechnern einen Diff über alle Dateien.
+* text=auto eol=lf
+
+# Dateien, die Windows-Werkzeuge mit CRLF erwarten
+*.sln  text eol=crlf
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+*.sh   text eol=lf
+
+# Binärdateien nie anfassen
+*.wasm binary
+*.stl  binary
+*.png  binary
+*.ico  binary
+*.woff binary
+*.woff2 binary
