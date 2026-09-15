@@ -1,0 +1,133 @@
+using TinkerFillet.Core.Brep;
+using TinkerFillet.Core.Geometry;
+
+namespace TinkerFillet.Core.Tests.Fixtures;
+
+/// <summary>
+/// Hand-built edge graphs.
+///
+/// Chain propagation is pure graph and vector arithmetic, so it can be pinned
+/// down exactly without a CAD kernel: a ring with a known number of segments, a
+/// junction with a known number of branches. Driving it from real geometry
+/// instead would make every test depend on the kernel agreeing about what it
+/// produced.
+/// </summary>
+public static class EdgeGraphFixtures
+{
+    /// <summary>
+    /// A closed ring of <paramref name="segments"/> straight edges around the Z
+    /// axis - the rim of a faceted cylinder. Every vertex joins exactly two
+    /// edges, so a chain should run the whole way round.
+    /// </summary>
+    public static EdgeGraph Ring(int segments, double radius = 5, double dihedralDegrees = 90)
+    {
+        var positions = new List<Vec3>();
+        for (var i = 0; i < segments; i++)
+        {
+            var angle = 2 * Math.PI * i / segments;
+            positions.Add(new Vec3(radius * Math.Cos(angle), radius * Math.Sin(angle), 0));
+        }
+
+        var edges = new List<EdgeInfo>();
+        for (var i = 0; i < segments; i++)
+        {
+            var next = (i + 1) % segments;
+            edges.Add(StraightEdge(i, positions[i], positions[next], [i, next], dihedralDegrees, [0, i + 1]));
+        }
+
+        return new EdgeGraph { Edges = edges, VertexPositions = positions, FaceCount = segments + 1 };
+    }
+
+    /// <summary>
+    /// An open run of straight edges along X, with free ends. A chain should
+    /// cover all of them and simply stop where the geometry does.
+    /// </summary>
+    public static EdgeGraph OpenRun(int segments, double dihedralDegrees = 90)
+    {
+        var positions = new List<Vec3>();
+        for (var i = 0; i <= segments; i++) positions.Add(new Vec3(i, 0, 0));
+
+        var edges = new List<EdgeInfo>();
+        for (var i = 0; i < segments; i++)
+            edges.Add(StraightEdge(i, positions[i], positions[i + 1], [i, i + 1], dihedralDegrees, [0, 1]));
+
+        return new EdgeGraph { Edges = edges, VertexPositions = positions, FaceCount = 2 };
+    }
+
+    /// <summary>
+    /// Three edges meeting at one vertex, the way they do at a cube corner.
+    /// There is no single way to continue, so a chain has to stop.
+    /// </summary>
+    public static EdgeGraph ThreeWayJunction(double dihedralDegrees = 90)
+    {
+        List<Vec3> positions = [new(0, 0, 0), new(1, 0, 0), new(0, 1, 0), new(0, 0, 1)];
+
+        List<EdgeInfo> edges =
+        [
+            StraightEdge(0, positions[0], positions[1], [0, 1], dihedralDegrees, [0, 1]),
+            StraightEdge(1, positions[0], positions[2], [0, 2], dihedralDegrees, [0, 2]),
+            StraightEdge(2, positions[0], positions[3], [0, 3], dihedralDegrees, [1, 2]),
+        ];
+
+        return new EdgeGraph { Edges = edges, VertexPositions = positions, FaceCount = 3 };
+    }
+
+    /// <summary>
+    /// Two edges meeting at a vertex with the given turn between them, both
+    /// sharing a face. Used to pin down where the kink tolerance bites.
+    /// </summary>
+    public static EdgeGraph Corner(double turnDegrees, double dihedralDegrees = 90)
+    {
+        var turn = turnDegrees * Math.PI / 180;
+        List<Vec3> positions =
+        [
+            new(-1, 0, 0),
+            new(0, 0, 0),
+            new(Math.Cos(turn), Math.Sin(turn), 0),
+        ];
+
+        List<EdgeInfo> edges =
+        [
+            StraightEdge(0, positions[0], positions[1], [0, 1], dihedralDegrees, [0, 1]),
+            StraightEdge(1, positions[1], positions[2], [1, 2], dihedralDegrees, [0, 2]),
+        ];
+
+        return new EdgeGraph { Edges = edges, VertexPositions = positions, FaceCount = 3 };
+    }
+
+    /// <summary>
+    /// Two edges meeting at a vertex but sharing no face - what happens where
+    /// two separate features happen to touch.
+    /// </summary>
+    public static EdgeGraph TouchingButUnrelated(double dihedralDegrees = 90)
+    {
+        List<Vec3> positions = [new(-1, 0, 0), new(0, 0, 0), new(1, 0, 0)];
+
+        List<EdgeInfo> edges =
+        [
+            StraightEdge(0, positions[0], positions[1], [0, 1], dihedralDegrees, [0, 1]),
+            StraightEdge(1, positions[1], positions[2], [1, 2], dihedralDegrees, [2, 3]),
+        ];
+
+        return new EdgeGraph { Edges = edges, VertexPositions = positions, FaceCount = 4 };
+    }
+
+    private static EdgeInfo StraightEdge(
+        int id, Vec3 from, Vec3 to, int[] vertices, double dihedralDegrees, int[] faces)
+    {
+        var direction = (to - from).Normalized();
+        return new EdgeInfo
+        {
+            Id = id,
+            Midpoint = (from + to) / 2,
+            Tangent = direction,
+            Length = (to - from).Length,
+            NormalA = new Vec3(0, 0, 1),
+            NormalB = direction.Cross(new Vec3(0, 0, 1)).Normalized(),
+            DihedralDegrees = dihedralDegrees,
+            Convex = true,
+            Faces = faces,
+            Vertices = vertices,
+        };
+    }
+}

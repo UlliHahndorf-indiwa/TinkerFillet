@@ -83,11 +83,19 @@ export function edgeGraph(kernel, solid) {
   edgeHashes.forEach((hash, index) => indexByHash.set(hash, index));
 
   // Endpoint identity, so the C# side can tell which edges meet without having
-  // to compare coordinates and pick a tolerance for it.
+  // to compare coordinates and pick a tolerance for it. The positions come
+  // along because chain propagation needs to know which way an edge leaves a
+  // vertex, and reading that off the vertex is unambiguous where reading it off
+  // the edge's own parametrisation is not.
+  const vertexShapes = kernel.getSubShapes(solid, "vertex");
   const vertexIndexByHash = new Map();
   kernel
     .subShapeHashes(solid, "vertex", HASH_UPPER_BOUND)
     .forEach((hash, index) => vertexIndexByHash.set(hash, index));
+  const vertexPositions = vertexShapes.map((vertex) => {
+    const box = kernel.getBoundingBox(vertex);
+    return { x: box.xmin, y: box.ymin, z: box.zmin };
+  });
 
   const facesOfEdge = edgeShapes.map(() => []);
   faceShapes.forEach((face, faceIndex) => {
@@ -147,7 +155,7 @@ export function edgeGraph(kernel, solid) {
     };
   });
 
-  return { edges, faceCount: faceShapes.length };
+  return { edges, faceCount: faceShapes.length, vertexPositions };
 }
 
 /**
