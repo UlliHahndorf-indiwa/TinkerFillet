@@ -95,6 +95,39 @@ public class WelderTests
     }
 
     [Fact]
+    public void TrianglesThatCollapseDuringWeldingAreDropped()
+    {
+        // A sliver narrower than the tolerance ends up with two corners on the
+        // same vertex. It carries no surface, and leaving it in gives a face
+        // outline two ways out of one vertex, which makes tracing that outline
+        // walk in circles.
+        double[] positions =
+        [
+            0, 0, 0, 1, 0, 0, 0, 1, 0,           // a real triangle
+            2, 0, 0, 2 + 1e-9, 0, 0, 3, 1, 0,    // first two corners weld together
+        ];
+
+        var mesh = Welder.Weld(new TriangleSoup(positions), tolerance: 1e-6);
+
+        Assert.Equal(1, mesh.TriangleCount);
+    }
+
+    [Fact]
+    public void ExactlyDuplicatedCornersAreDroppedToo()
+    {
+        // The pole of a UV sphere, where a quad degenerates into a line.
+        double[] positions =
+        [
+            0, 0, 0, 1, 0, 0, 0, 1, 0,
+            5, 5, 5, 6, 5, 5, 5, 5, 5,
+        ];
+
+        var mesh = Welder.Weld(new TriangleSoup(positions), tolerance: 1e-6);
+
+        Assert.Equal(1, mesh.TriangleCount);
+    }
+
+    [Fact]
     public void DefaultToleranceScalesWithTheModel()
     {
         var small = MeshFixtures.Cube(size: 1);

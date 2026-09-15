@@ -49,7 +49,7 @@ public static class Welder
         if (tolerance <= 0) throw new ArgumentOutOfRangeException(nameof(tolerance), "tolerance must be positive");
 
         var positions = soup.Positions;
-        var indices = new int[soup.TriangleCount * 3];
+        var corners = new int[soup.TriangleCount * 3];
         var vertices = new List<double>(positions.Length / 3);
 
         // Cell size equals the tolerance, so any point within tolerance of a
@@ -59,7 +59,7 @@ public static class Welder
         var buckets = new Dictionary<(long X, long Y, long Z), List<int>>();
         var toleranceSquared = tolerance * tolerance;
 
-        for (var corner = 0; corner < indices.Length; corner++)
+        for (var corner = 0; corner < corners.Length; corner++)
         {
             var x = positions[corner * 3];
             var y = positions[corner * 3 + 1];
@@ -83,10 +83,43 @@ public static class Welder
                 bucket.Add(existing);
             }
 
-            indices[corner] = existing;
+            corners[corner] = existing;
         }
 
-        return new IndexedMesh([.. vertices], indices);
+        return new IndexedMesh([.. vertices], DropCollapsedTriangles(corners));
+    }
+
+    /// <summary>
+    /// Removes triangles whose corners did not stay distinct through welding.
+    ///
+    /// Exporters emit these: a sliver narrower than the tolerance, or the fan
+    /// around the pole of a UV sphere where a quad degenerates into a line.
+    /// They carry no surface, and removing them is topologically free - such a
+    /// triangle's two real edges run in opposite directions between the same
+    /// pair of vertices, so they pair with each other and with nothing outside
+    /// the triangle.
+    ///
+    /// Leaving them in is not free: a collapsed triangle gives a face outline
+    /// two ways out of one vertex, and tracing the outline then walks in
+    /// circles.
+    /// </summary>
+    private static int[] DropCollapsedTriangles(int[] corners)
+    {
+        var kept = new List<int>(corners.Length);
+
+        for (var triangle = 0; triangle < corners.Length / 3; triangle++)
+        {
+            var a = corners[triangle * 3];
+            var b = corners[triangle * 3 + 1];
+            var c = corners[triangle * 3 + 2];
+            if (a == b || b == c || c == a) continue;
+
+            kept.Add(a);
+            kept.Add(b);
+            kept.Add(c);
+        }
+
+        return [.. kept];
     }
 
     private static int FindNearby(
