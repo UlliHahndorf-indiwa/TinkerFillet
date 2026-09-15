@@ -49,6 +49,7 @@ offline" nicht ab.
 | Zusatzfunktion | Größten möglichen Radius vorschlagen | Erspart Raten bei zu großem Radius |
 | Auslieferung | Blazor-PWA, statisch auf GitHub Pages | Lesezeichen neben Tinkercad, offline, keine Uploads |
 | Repo-Ort | `E:\Web\TinkerFillet`, **außerhalb iCloud Drive** | Sync über Git statt iCloud; keine Konflikte bei Build-Artefakten |
+| Sichtbarkeit | **Öffentliches** GitHub-Repo | GitHub Free liefert keine Pages aus privaten Repos; das Werkzeug enthält nichts Geheimes |
 
 **Nicht-Ziele v1:** organische/gescannte Meshes, Fase/Chamfer, variabler Radius
 entlang einer Kante, Boolean-Operationen, STEP-Export, einstellbare
@@ -432,12 +433,18 @@ Erwartung: von ~35 MB auf 5–10 MB.
 Blazor-PWA-Vorlage, Service Worker cacht .NET-Runtime, App und OCC-WASM.
 Statisches Deployment auf GitHub Pages.
 
-Zwei bekannte Stolperfallen, die eingeplant sind:
+Drei bekannte Stolperfallen, die eingeplant sind:
+- Das Repo muss **öffentlich** sein. GitHub Free liefert keine Pages aus
+  privaten Repos; ein auf privat gestelltes Repo depubliziert eine bestehende
+  Seite automatisch.
 - `.nojekyll` im Publish-Verzeichnis, sonst ignoriert GitHub Pages die
   `_framework`-Ordner
 - `index.html` darf **nach** dem Publish nicht von Hand geändert werden — die
   Integritätsprüfung über `service-worker-assets.js` bricht sonst. Das
   `<base href>` wird über den Build gesetzt, nicht nachträglich editiert.
+
+Die vendorte OCC-`.wasm` (~35 MB) liegt damit im öffentlichen Repo. Unter dem
+100-MB-Limit von GitHub, wird selten aktualisiert — Git LFS ist nicht nötig.
 
 Modelle werden nie hochgeladen, die gesamte Rechnung passiert im Browser.
 
