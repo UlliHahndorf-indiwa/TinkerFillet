@@ -43,7 +43,7 @@ offline" nicht ab.
 | Auswahl | Klick wählt ganze Kantenkette | Tessellierter Lochrand besteht aus vielen Einzelsegmenten |
 | Workflow | Mehrere Fillets, editierbare Feature-Liste, Undo/Redo | Gewohnter CAD-Ablauf |
 | **Stack** | **Blazor WebAssembly standalone (.NET 10), C# für den Algorithmenkern** | Vertraute Sprache genau dort, wo die Arbeit schwierig ist |
-| CAD-Kern | opencascade.js über JS-Interop, im Web Worker | Es gibt keinen .NET-B-Rep-Kernel mit Fillet — geprüft |
+| CAD-Kern | **occt-wasm 5.0.0** über JS-Interop, im Web Worker | Es gibt keinen .NET-B-Rep-Kernel mit Fillet — geprüft. Zu `opencascade.js` siehe 1.1-Ergebnisse |
 | 3D-Anzeige | Three.js über JS-Interop | Alternative wäre rohes WebGL, deutlich mehr Arbeit |
 | Replay-Fehler | Schritt als `failed` markieren, Rest rechnen | Verhalten echter CAD-Systeme, kein Arbeitsverlust |
 | Zusatzfunktion | Größten möglichen Radius vorschlagen | Erspart Raten bei zu großem Radius |
@@ -65,8 +65,9 @@ Algorithmen, JavaScript für Kernel und 3D".
   Das ist der schwierige Teil und grob 70 % des Aufwands.
 - **Bleibt JavaScript:** der OpenCASCADE-Aufruf und der Three.js-Viewport,
   realistisch 400–600 Zeilen Klebecode.
-- **Entfällt:** npm und `node_modules`. `opencascade.js` und Three.js werden
-  als fertige Dateien nach `wwwroot/lib/` gelegt.
+- **Entfällt:** npm und `node_modules`. Kernel und Three.js werden als fertige
+  Dateien nach `wwwroot/lib/` gelegt. In 1.1 bestätigt: die Node-Tests laufen
+  mit `node --test` gegen genau diese Dateien, ohne ein einziges npm-Paket.
 - **Wird besser als im TS-Entwurf:** Die Kerntests laufen als xUnit auf
   Desktop-.NET — schneller, kein Browser, normaler Debugger.
 
@@ -80,6 +81,111 @@ Algorithmen, JavaScript für Kernel und 3D".
 - git 2.41.0
 
 Nichts nachzuinstallieren.
+
+Zwei Anpassungen am Rechner-Setup, die der Durchstich erzwungen hat:
+
+- `NuGet.config` im Repo mit `<clear />`. Auf dem Windows-Rechner sind
+  NuGet-Quellen registriert, die auf deinstallierte DevExpress-Versionen zeigen
+  und jedes `restore` mit NU1301 scheitern lassen. Nebeneffekt: eine der
+  geerbten Quellen enthält ein Zugangstoken in der URL — das kann so nicht
+  versehentlich ins öffentliche Repo geraten.
+- `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` im App-Projekt. `[JSImport]`
+  erzeugt unsicheren Marshalling-Code und verweigert sonst den Dienst
+  (SYSLIB1074).
+
+---
+
+## Ergebnisse des Durchstichs (Stufe 1.1)
+
+Durchgeführt und gemessen. Diese Befunde korrigieren mehrere Annahmen weiter
+unten; wo sie widersprechen, gilt dieser Abschnitt.
+
+### Kernelwechsel: opencascade.js → occt-wasm
+
+`opencascade.js` ist faktisch aufgegeben — stabile Version von September 2020,
+letzte Beta März 2023. `occt-wasm` wird wöchentlich veröffentlicht.
+
+| | opencascade.js 1.1.1 | occt-wasm 5.0.0 |
+|---|---|---|
+| Letzte Version | Sep 2020 (Beta Mrz 2023) | 10.09.2026 |
+| WASM entpackt | 65,9 MB | **22,2 MB** |
+| Lizenz | LGPL-2.1-only | **MIT OR Apache-2.0** |
+| API | rohe Emscripten-Bindings | kuratierte TypeScript-API |
+
+Entscheidend war nicht die Größe, sondern die API-Tiefe. `occt-wasm` deckt die
+geplante Pipeline fast wörtlich ab:
+
+| Planschritt | Funktion |
+|---|---|
+| Loops → Fläche mit Löchern | `makeLineEdge` → `makeWire` → `makeFace` → `addHolesInFace` |
+| Vernähen und Solidify (1.7) | `buildSolidFromFaces(faces, tolerance)`, `sewAndSolidify` |
+| Kantengraph (1.8) | `getSubShapes`, `edgeToFaceMap`, `adjacentFaces`, `sharedEdges`, `outerWire` |
+| Fillet (1.10) | `fillet(solid, edges, radius)` |
+| Tessellierung (1.10) | `tessellate(shape, { linearDeflection })`, `wireframe` |
+| Analytischer Test | `getVolume`, `curveLength` |
+| Stufe 2 | `makeCircleEdge`, `getFaceCylinderData` |
+| Fehlerbehandlung (1.13) | `healFace`, `healWire`, `healSolid`, `fixFaceOrientations` |
+
+Folge: der JS-Klebecode wird deutlich kleiner als die geschätzten 400–600
+Zeilen. **Version exakt pinnen** — zwischen 4.3.1 und 5.0.0 lagen drei Wochen.
+
+### Risiko „OCC-Fehler" — aufgelöst, günstig
+
+Ein unmöglicher Fillet wirft eine fangbare `OcctError` mit
+`code: CONSTRUCTION_FAILED`, **kein hartes `abort()`**. Der Kernel ist danach
+unverändert weiter benutzbar; der nächste Fillet lief normal durch.
+
+Damit wird der Worker-Neustart aus dem Architekturabschnitt vom tragenden
+Designtreiber zum bloßen Sicherheitsnetz. Der Zustandsschnitt bleibt trotzdem
+wie beschrieben — er kostet nichts und deckt den Rest ab.
+
+### Risiko „Interop-Kosten" — aufgelöst, unkritisch
+
+Gemessen mit 900 000 doubles (7,2 MB, etwa die Vertexdaten eines
+100k-Dreiecke-Meshes), durch die ganze Kette bis in den Worker:
+
+| Pfad | gesamt | davon Kopie/Konvertierung | Worker-Hinweg |
+|---|---|---|---|
+| `MemoryView` (zweistufig) | 8 ms | 1,6 ms | 5,1 ms |
+| `double[]` (naiv) | 12 ms | 1,8 ms | 2,0 ms |
+
+Beide unkritisch. Die Grenze wird einmal pro Operation überquert, nicht pro
+Bild. **Empfehlung: den einfachen `double[]`-Pfad nehmen.** Der
+Geschwindigkeitsvorteil von `MemoryView` rechtfertigt seine Komplexität nicht —
+und `MemoryView` erzwingt sie: eine `Span<T>`-Parameter lässt sich **nicht** mit
+einem `Task<T>`-Rückgabewert kombinieren (SYSLIB1072), weil die View nur
+während des synchronen Teils gültig ist. Man braucht dann zwingend zwei
+Aufrufe: einen synchronen zum Übergeben, einen asynchronen zum Verarbeiten.
+
+### Gemessene Laufzeiten
+
+| Schritt | Zeit |
+|---|---|
+| JS-Modul laden | 15 ms |
+| Kernel im Worker starten (22 MB WASM) | 402 ms |
+| Fillet auf Würfelkante, erster Aufruf | 107 ms |
+| derselbe Fillet, warm | 7 ms |
+
+### Fillet-Korrektheit durch die ganze Kette
+
+Relativer Fehler gegen `ΔV = (1 − π/4)·r²·L`:
+
+| r | 0,5 | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|---|
+| rel. Fehler | 2,4e-13 | 3,9e-14 | 3,6e-15 | 7,5e-15 | 3,6e-15 |
+
+Das entfernte Volumen folgt `r²` über fünf Radien auf Maschinengenauigkeit —
+exakte B-Rep-Geometrie, keine Näherung. Derselbe Wert kam auch durch die volle
+Kette .NET → JS → Worker → WASM zurück.
+
+### Offen geblieben
+
+`filletWithHistory` liefert `EvolutionData` mit `modified`/`generated`/
+`deleted`-Flächenhashes — potenziell ein Ersatz für den heuristischen
+Fingerabdruck aus Abschnitt 6.2. Der Probelauf ergab aber unplausible Zahlen
+(6 Eingabeflächen, 12 „modified", 0 „generated", obwohl der Fillet eine neue
+Fläche erzeugt). Semantik ungeklärt. **Abschnitt 6.2 bleibt vorerst wie
+geplant**, mit einer Neubewertung, sobald echte Geometrie durchläuft.
 
 ---
 
@@ -131,7 +237,7 @@ src/
     Interop/OccBridge.cs       [JSImport] auf occ-bridge.js
     Interop/ViewportBridge.cs  [JSImport] auf viewport.js
     wwwroot/
-      lib/opencascade/         vendored: opencascade.full.js + .wasm
+      lib/occt/                vendored: occt-wasm 5.0.0 dist (22,2 MB .wasm)
       lib/three/               vendored: three.module.js
       js/occ-bridge.js         Main-Thread-Seite, startet und überwacht Worker
       js/occ-worker.js         Worker: OCC laden, Recipe bauen, Fillet, Tessellieren
@@ -424,10 +530,14 @@ sonst scheitert das Vernähen.
 Schlägt der Fillet fehl, Binärsuche zwischen 0 und dem angefragten Radius,
 6 Iterationen. Im Worker mit Fortschrittsanzeige, abbrechbar.
 
-### 3.2 Custom-WASM-Build von OpenCASCADE
-Nur `BRep`, `BRepBuilderAPI`, `BRepFilletAPI`, `BRepMesh`, `BRepGProp`,
-`ShapeFix`, `ShapeAnalysis`, `Geom`, `TopExp`, `TopoDS` einkompilieren.
-Erwartung: von ~35 MB auf 5–10 MB.
+### 3.2 Auslieferungsgröße prüfen
+Ersetzt den ursprünglich geplanten Custom-WASM-Build. `occt-wasm` ist bereits
+ein kuratierter Build mit 22,2 MB, ein eigener Emscripten-Build wäre erheblicher
+Aufwand für unklaren Gewinn — und würde die Docker/Emscripten-Toolchain wieder
+einschleppen, die Stufe 1 und 2 bewusst nicht brauchen.
+
+Stattdessen: messen, was Brotli-Kompression und der Service-Worker-Cache real
+bringen, und erst dann entscheiden, ob mehr nötig ist.
 
 ### 3.3 PWA / Offline / Deployment
 Blazor-PWA-Vorlage, Service Worker cacht .NET-Runtime, App und OCC-WASM.
@@ -513,14 +623,14 @@ abgesetzter Kante, nach Stufe 2 eine Platte mit Durchgangsloch.
 
 ## Offene Risiken
 
-1. **Interop-Kette .NET ↔ JS ↔ Worker ↔ Emscripten** ist der neue, im
-   TypeScript-Entwurf nicht vorhandene Risikopunkt. Insbesondere die Kosten für
-   große Arrays über zwei Hops. *Mitigation:* Durchstich 1.1 vor allem anderen;
-   die Grenze wird einmal pro Operation überquert, nicht pro Frame.
-2. **Verhalten von opencascade.js bei OCC-Exceptions**: sichtbar als
-   JavaScript-Exception, oder hartes Abbrechen des Moduls? Der Worker-Neustart
-   deckt beide Fälle ab, aber die Meldungsqualität hängt daran. Wird in 1.1
-   mitbeantwortet.
+1. ~~**Interop-Kette .NET ↔ JS ↔ Worker ↔ Emscripten**~~ — **erledigt in 1.1.**
+   8–12 ms für 7,2 MB durch die ganze Kette. Kein Engpass.
+2. ~~**Verhalten bei OCC-Exceptions**~~ — **erledigt in 1.1.** Fangbare
+   `OcctError` mit Fehlercode, kein hartes Abbrechen, Kernel danach weiter
+   benutzbar.
+2a. **Versionsdrift von `occt-wasm`** ist das neue Risiko an dieser Stelle.
+   Zwischen 4.3.1 und 5.0.0 lagen drei Wochen. Version exakt pinnen, Updates
+   nur bewusst und gegen die Testsuite.
 3. **B-Rep-Aufbau gekrümmter Flächen (2.3)** ist der fiddligste Teil.
    Randschleifen erkannter Zylinder müssen exakt auf der Trägerfläche liegen,
    sonst scheitert das Vernähen. *Mitigation:* Stufe 1 liefert bereits ein
@@ -529,9 +639,9 @@ abgesetzter Kante, nach Stufe 2 eine Platte mit Durchgangsloch.
    < 2 s, B-Rep-Aufbau < 3 s, Fillet < 2 s. Deutliche Verfehlung → Regionen-
    bildung auf `Span<T>`/Arrays statt Objektlisten umstellen.
 5. **Prisma/Zylinder-Mehrdeutigkeit (2.1)** ist prinzipiell nicht auflösbar.
-6. **Downloadgröße**: OCC-WASM ~35 MB dominiert, .NET-Runtime kommt mit ~2–3 MB
-   komprimiert obendrauf. Durch Service Worker nur einmalig, durch Custom-Build
-   in 3.2 deutlich reduzierbar.
+6. **Downloadgröße**: OCC-WASM 22,2 MB unkomprimiert dominiert, .NET-Runtime
+   kommt mit ~2–3 MB komprimiert obendrauf. Durch Service Worker nur einmalig.
+   Deutlich kleiner als die ursprünglich angenommenen 35 MB.
 
 ---
 
