@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TinkerFillet.App/TinkerFillet.App.csproj" />
+    <Project Path="src/TinkerFillet.Core/TinkerFillet.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TinkerFillet.Core.Tests/TinkerFillet.Core.Tests.csproj" />
+  </Folder>
+</Solution>

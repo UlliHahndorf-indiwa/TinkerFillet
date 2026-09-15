@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tinkerfillet",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "E:/Web/TinkerFillet/src/TinkerFillet.App/TinkerFillet.App.csproj",
+        "--launch-profile",
+        "http"
+      ],
+      "port": 5013
+    }
+  ]
+}

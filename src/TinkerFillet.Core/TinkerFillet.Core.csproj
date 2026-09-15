@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The algorithmic core: STL parsing, mesh topology, region growing, loop
+    extraction, primitive fitting, edge selection, feature history.
+
+    Deliberately has no reference to Blazor, to the browser, or to the CAD
+    kernel. Everything here runs and debugs on the desktop, which is where the
+    hard parts of this project get worked out.
+
+    Shared settings live in Directory.Build.props.
+  -->
+
+</Project>

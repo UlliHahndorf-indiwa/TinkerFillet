@@ -1,0 +1,21 @@
+<Project>
+
+  <!--
+    Shared settings for every project in the solution, so the three .csproj
+    files only have to state what makes them different.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!--
+      The geometry code is full of tolerance comparisons and array indexing
+      where a nullable or unused-variable warning usually means a real mistake.
+      Cheaper to stop at the warning than to debug the result later.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

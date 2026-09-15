@@ -1,0 +1,8 @@
+.app-shell {
+    /* Fill the viewport: the 3D viewport needs a fixed, known box to render
+       into, and nothing on this screen should scroll the page itself. */
+    position: fixed;
+    inset: 0;
+    display: flex;
+    overflow: hidden;
+}
