@@ -247,6 +247,75 @@ public static class MeshFixtures
     }
 
     /// <summary>
+    /// A plate with two square holes that touch at one corner.
+    ///
+    /// The defect a real exported model turned out to have. Where the two holes
+    /// meet, one vertical edge carries four triangles instead of two, and the
+    /// face around them has an outline that arrives at that corner twice. Both
+    /// are things the pipeline has to survive and report rather than throw on.
+    ///
+    /// Cut from a 4x4 grid so every face meets its neighbours at shared
+    /// vertices; a T-junction here would be the fixture's own defect rather
+    /// than the one being tested.
+    /// </summary>
+    public static TriangleSoup PlateWithTouchingHoles(double step = 5, double thickness = 4)
+    {
+        List<double> triangles = new();
+        double[] xs = [0, step, 2 * step, 3 * step, 4 * step];
+        var ys = xs; // square plate: the same grid lines in both directions
+
+        // The holes are the two cells that share the corner (2, 2).
+        bool IsHole(int i, int j) => (i == 1 && j == 1) || (i == 2 && j == 2);
+
+        for (var i = 0; i < 4; i++)
+        {
+            for (var j = 0; j < 4; j++)
+            {
+                if (IsHole(i, j)) continue;
+
+                AppendQuad(triangles,
+                    new Vec3(xs[i], ys[j], thickness), new Vec3(xs[i + 1], ys[j], thickness),
+                    new Vec3(xs[i + 1], ys[j + 1], thickness), new Vec3(xs[i], ys[j + 1], thickness));
+                AppendQuad(triangles,
+                    new Vec3(xs[i], ys[j], 0), new Vec3(xs[i], ys[j + 1], 0),
+                    new Vec3(xs[i + 1], ys[j + 1], 0), new Vec3(xs[i + 1], ys[j], 0));
+            }
+        }
+
+        var outer = xs[4];
+        for (var k = 0; k < 4; k++)
+        {
+            AppendQuad(triangles,
+                new Vec3(xs[k], 0, 0), new Vec3(xs[k + 1], 0, 0),
+                new Vec3(xs[k + 1], 0, thickness), new Vec3(xs[k], 0, thickness));
+            AppendQuad(triangles,
+                new Vec3(xs[k + 1], outer, 0), new Vec3(xs[k], outer, 0),
+                new Vec3(xs[k], outer, thickness), new Vec3(xs[k + 1], outer, thickness));
+            AppendQuad(triangles,
+                new Vec3(outer, ys[k], 0), new Vec3(outer, ys[k + 1], 0),
+                new Vec3(outer, ys[k + 1], thickness), new Vec3(outer, ys[k], thickness));
+            AppendQuad(triangles,
+                new Vec3(0, ys[k + 1], 0), new Vec3(0, ys[k], 0),
+                new Vec3(0, ys[k], thickness), new Vec3(0, ys[k + 1], thickness));
+        }
+
+        // Each hole's four walls, wound so their normals point into the hole.
+        foreach ((var i, var j) in new[] { (1, 1), (2, 2) })
+        {
+            Wall(xs[i], ys[j], xs[i + 1], ys[j]);
+            Wall(xs[i + 1], ys[j], xs[i + 1], ys[j + 1]);
+            Wall(xs[i + 1], ys[j + 1], xs[i], ys[j + 1]);
+            Wall(xs[i], ys[j + 1], xs[i], ys[j]);
+        }
+
+        return new TriangleSoup([.. triangles]);
+
+        void Wall(double x0, double y0, double x1, double y1) => AppendQuad(triangles,
+            new Vec3(x0, y0, 0), new Vec3(x0, y0, thickness),
+            new Vec3(x1, y1, thickness), new Vec3(x1, y1, 0));
+    }
+
+    /// <summary>
     /// A sphere as rings of quads: the shape region growing can do least with.
     ///
     /// Nothing here is flat, so each quad comes out as its own tiny region and

@@ -115,10 +115,10 @@ public class LoopExtractorTests
         IndexedMesh mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
         RegionSet regions = RegionGrower.Grow(MeshTopology.Build(mesh), RegionOptions.ForModel(mesh));
 
-        IReadOnlyList<RegionLoops> unsimplified = LoopExtractor.Extract(
+        LoopExtraction unsimplified = LoopExtractor.Extract(
             MeshTopology.Build(mesh), regions, new LoopOptions(CollinearAngleRadians: 0));
 
-        Assert.Equal(16, unsimplified[0].Outer.Vertices.Count);
+        Assert.Equal(16, unsimplified.Faces[0].Outer.Vertices.Count);
     }
 
     private static RegionSet Regions(TriangleSoup soup)
@@ -132,6 +132,6 @@ public class LoopExtractorTests
         IndexedMesh mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
         var topology = MeshTopology.Build(mesh);
         RegionSet regions = RegionGrower.Grow(topology, RegionOptions.ForModel(mesh));
-        return LoopExtractor.Extract(topology, regions, LoopOptions.Default);
+        return LoopExtractor.Extract(topology, regions, LoopOptions.Default).Faces;
     }
 }

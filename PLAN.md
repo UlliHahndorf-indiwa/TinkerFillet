@@ -725,6 +725,73 @@ dort 4,2 s und im Release 1,05 s.
 
 ---
 
+## Zweiter echter Export — funktioniert ✅
+
+`obj_1_Corpo5.stl`, 6228 Dreiecke, 20,25 × 58,68 × 6 mm. Eine flache Platte mit
+erhabener Schrift und Schraffur — daher 1462 Flächen bei nur 6228 Dreiecken.
+
+Anders als die erste Datei ist das **CAD-Geometrie**: geschlossen, größte Region
+687 Dreiecke, 50,8 % der Flächenwinkel unter 0,5°. Trotzdem scheiterte sie
+zunächst zweimal.
+
+### Absturz in Schritt 5
+
+`LoopExtractor` warf `InvalidOperationException: the outline of region 836
+revisits vertex 1045` — in der App eine ungefangene Ausnahme, also der rote
+Blazor-Balken statt einer Erklärung.
+
+Ursache: **zwei Kanten tragen je vier Dreiecke** statt zwei, dort wo sich zwei
+Features berühren. Der Rand der Fläche daneben läuft dadurch zweimal durch
+denselben Eckpunkt. Der Tracer merkte sich aber nur *einen* Ausgang je Eckpunkt
+(`successor[vertex] = halfEdge`), verlor damit eine ganze Schleife und riss den
+Rest auseinander.
+
+Behoben: mehrere Ausgänge je Eckpunkt, einzeln verbraucht. Ein Rand, der sich
+selbst in einem Punkt berührt, zerfällt damit von selbst in die richtigen
+geschlossenen Schleifen. Lässt er sich trotzdem nicht schließen, wird die
+Region gemeldet (`DiagnosticKind.UntraceableFaces`) und übersprungen —
+**niemals mehr geworfen**. Eine Ausnahme an dieser Stelle kostet den Nutzer
+genau die Diagnose, die sein Modell erklärt hätte.
+
+### 165 Flächen, die der Kernel ablehnte
+
+Danach lief die Rekonstruktion durch, aber `makeFace` verweigerte 165 der 1462
+Flächen. Gemessen:
+
+| Flächen | Abweichung von der eigenen Ebene |
+|---|---|
+| angenommen (1296) | ≤ 1,3e-14 — exakt eben |
+| abgelehnt (165) | 1,7e-6 bis **3,6e-3** |
+
+Regionenwachstum nimmt ein Dreieck auf, dessen Schwerpunkt innerhalb `1e-4·D`
+(hier 6,2e-3) an der Ebene liegt. Die Eckpunkte wurden dann **roh aus dem Netz**
+in die Beschreibung kopiert — also *fast* eben. Der Kernel will für eine ebene
+Fläche einen exakt ebenen Rand und lehnt alles andere ab.
+
+Behoben: die Randpunkte werden auf die Ebene der Region projiziert. Das ist
+gefahrlos, weil die Verschiebung durch dieselbe Toleranz begrenzt ist, mit der
+die Flächen danach vernäht werden — ein Eckpunkt, den sich zwei Flächen teilen,
+wird zu beiden Ebenen gezogen und trifft sich trotzdem innerhalb der Naht.
+
+### Ergebnis
+
+| | |
+|---|---|
+| abgelehnte Flächen | 165 → **0** |
+| Körper | **schließt sich**, Volumen 3809,65 mm³ |
+| Kanten | 3477, davon 2011 scharf (1158 konvex, 853 konkav) |
+| Verrundung | gebaut und Material entfernt, größter tragfähiger Radius 0,98 mm |
+| gesamte Rekonstruktion | ~1,2 s Desktop-Release |
+
+`PinchedOutlineTests` hält das fest, mit `MeshFixtures.PlateWithTouchingHoles` —
+einer Platte, deren zwei Löcher sich in einer Ecke berühren und damit genau den
+Vier-Dreiecke-Defekt erzeugen.
+
+Verbleibend: 57 Kanten ohne Flächenpaar, Rest der acht nicht-mannigfaltigen
+Kanten. Die App meldet sie, der Körper entsteht trotzdem.
+
+---
+
 ## Stufe 2 — Umsetzung
 
 Ohne diesen Schritt besteht ein Tinkercad-Lochrand aus N Einzelkanten; der

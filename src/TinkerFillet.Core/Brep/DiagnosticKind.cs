@@ -14,4 +14,11 @@ public enum DiagnosticKind
     /// quality will be poor.
     /// </summary>
     NotCadLike,
+
+    /// <summary>
+    /// Faces whose outline does not close, so no face could be described for
+    /// them. Always a consequence of one of the two defects above, never a
+    /// cause of its own.
+    /// </summary>
+    UntraceableFaces,
 }

@@ -51,7 +51,8 @@ public static class Reconstructor
         RegionSet regions = RegionGrower.Grow(topology, RegionOptions.ForModel(mesh));
 
         await Announce(ReconstructionStage.Loops);
-        IReadOnlyList<RegionLoops> loops = LoopExtractor.Extract(topology, regions, LoopOptions.Default);
+        LoopExtraction traced = LoopExtractor.Extract(topology, regions, LoopOptions.Default);
+        IReadOnlyList<RegionLoops> loops = traced.Faces;
 
         await Announce(ReconstructionStage.Cylinders);
         FittingOptions options = fitting ?? FittingOptions.Default;
@@ -62,7 +63,7 @@ public static class Reconstructor
             topology, regions, options, [.. cylinders.SelectMany(cylinder => cylinder.RegionIndices)]);
 
         await Announce(ReconstructionStage.Recipe);
-        BrepRecipe recipe = BuildRecipe(mesh, loops, cylinders, cones, SewTolerance(mesh));
+        BrepRecipe recipe = BuildRecipe(mesh, regions, loops, cylinders, cones, SewTolerance(mesh));
 
         return new ReconstructionResult
         {
@@ -73,7 +74,7 @@ public static class Reconstructor
             Loops = loops,
             Cylinders = cylinders,
             Cones = cones,
-            Diagnostics = Diagnose(topology, recipe, mesh),
+            Diagnostics = Diagnose(topology, recipe, mesh, traced.Untraceable.Count),
         };
     }
 
@@ -82,6 +83,7 @@ public static class Reconstructor
 
     private static BrepRecipe BuildRecipe(
         IndexedMesh mesh,
+        RegionSet regions,
         IReadOnlyList<RegionLoops> loops,
         IReadOnlyList<CylinderFit> cylinders,
         IReadOnlyList<ConeFit> cones,
@@ -105,10 +107,12 @@ public static class Reconstructor
         {
             if (absorbed.Contains(face.RegionIndex)) continue;
 
+            PlanarRegion plane = regions.Regions[face.RegionIndex];
+
             faces.Add(new RecipeFace(
                 Kind: SurfaceKind.Plane,
-                Outer: ToRecipeLoop(mesh, face.Outer, cylinders, cones),
-                Holes: [.. face.Holes.Select(hole => ToRecipeLoop(mesh, hole, cylinders, cones))],
+                Outer: ToRecipeLoop(mesh, plane, face.Outer, cylinders, cones),
+                Holes: [.. face.Holes.Select(hole => ToRecipeLoop(mesh, plane, hole, cylinders, cones))],
                 SurfaceParameters: []));
         }
 
@@ -124,19 +128,39 @@ public static class Reconstructor
     /// longer meet and sewing fails.
     /// </summary>
     private static RecipeLoop ToRecipeLoop(
-        IndexedMesh mesh, Loop loop, IReadOnlyList<CylinderFit> cylinders, IReadOnlyList<ConeFit> cones)
+        IndexedMesh mesh,
+        PlanarRegion region,
+        Loop loop,
+        IReadOnlyList<CylinderFit> cylinders,
+        IReadOnlyList<ConeFit> cones)
     {
+        RecipeLoop? circle = AsRimOf(mesh, loop, cylinders, cones);
+        if (circle is not null) return circle;
+
+        // Dropped onto the region's own plane rather than copied from the mesh.
+        //
+        // Region growing takes a triangle whose centroid is within a tolerance
+        // of the plane, so a face recovered from a very slightly curved area
+        // has corners that are near the plane but not on it. The kernel wants a
+        // planar wire to build a planar face from and refuses anything else -
+        // on one exported model that was 165 faces of 1462, out by between a
+        // micron and four thousandths of a millimetre.
+        //
+        // Moving them is safe because the distance is bounded by the same
+        // tolerance that let the triangle in, which is the tolerance the faces
+        // are later sewn with. A corner shared by two faces is pulled to each
+        // of their planes and the two results still meet within it.
         var points = new double[loop.Vertices.Count * 3];
         for (var i = 0; i < loop.Vertices.Count; i++)
         {
             Vec3 vertex = mesh.Vertex(loop.Vertices[i]);
-            points[i * 3] = vertex.X;
-            points[i * 3 + 1] = vertex.Y;
-            points[i * 3 + 2] = vertex.Z;
+            Vec3 onPlane = vertex - region.Normal * region.DistanceToPlane(vertex);
+            points[i * 3] = onPlane.X;
+            points[i * 3 + 1] = onPlane.Y;
+            points[i * 3 + 2] = onPlane.Z;
         }
 
-        RecipeLoop? circle = AsRimOf(mesh, loop, cylinders, cones);
-        return circle ?? RecipeLoop.Polygon(points);
+        return RecipeLoop.Polygon(points);
     }
 
     private static RecipeLoop? AsRimOf(
@@ -215,9 +239,19 @@ public static class Reconstructor
     /// Findings are reported, never acted on. Whether a warning is worth
     /// stopping for is the user's call, so a recipe is produced either way.
     /// </summary>
-    private static List<Diagnostic> Diagnose(MeshTopology topology, BrepRecipe recipe, IndexedMesh mesh)
+    private static List<Diagnostic> Diagnose(
+        MeshTopology topology, BrepRecipe recipe, IndexedMesh mesh, int untraceable)
     {
         List<Diagnostic> findings = new();
+
+        if (untraceable > 0)
+        {
+            findings.Add(new Diagnostic(
+                DiagnosticKind.UntraceableFaces,
+                untraceable,
+                $"{untraceable} face(s) have an outline that does not close, so they are missing " +
+                "from the description - a consequence of the mesh defects reported alongside"));
+        }
 
         if (topology.BoundaryHalfEdges.Count > 0)
         {

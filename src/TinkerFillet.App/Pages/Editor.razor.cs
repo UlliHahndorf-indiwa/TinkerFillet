@@ -110,6 +110,9 @@ public partial class Editor : IAsyncDisposable
         DiagnosticKind.NonManifoldEdges =>
             $"{finding.Count} Kante(n) haben mehr als zwei angrenzende Dreiecke oder eine "
             + "widersprüchliche Umlaufrichtung. Das kann kein Körper haben.",
+        DiagnosticKind.UntraceableFaces =>
+            $"Bei {finding.Count} Fläche(n) schließt sich der Rand nicht, sie fehlen deshalb in der "
+            + "Beschreibung. Das ist eine Folge der oben gemeldeten Netzfehler, keine eigene Ursache.",
         DiagnosticKind.NotCadLike =>
             $"Aus {_model?.Mesh.TriangleCount} Dreiecken wurden {finding.Count} Flächen - es ist "
             + "also fast nichts zusammengefallen. Das sieht nach einem gerundeten oder gescannten "

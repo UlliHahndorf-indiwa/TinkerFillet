@@ -8,18 +8,31 @@ namespace TinkerFillet.Core.Mesh;
 /// </summary>
 public static class LoopExtractor
 {
-    public static IReadOnlyList<RegionLoops> Extract(
+    /// <summary>
+    /// Traces every region it can, and names the ones it cannot.
+    ///
+    /// A region with a torn outline used to throw. That is the wrong answer for
+    /// something the pipeline already knows how to report: the mesh that caused
+    /// it was non-manifold, the diagnostics were about to say so, and the
+    /// exception meant the user saw an unhandled error instead of the reason.
+    /// </summary>
+    public static LoopExtraction Extract(
         MeshTopology topology, RegionSet regions, LoopOptions options)
     {
-        List<RegionLoops> result = new(regions.Regions.Count);
+        List<RegionLoops> faces = new(regions.Regions.Count);
+        List<int> untraceable = [];
 
         for (var index = 0; index < regions.Regions.Count; index++)
-            result.Add(ExtractRegion(topology, regions, index, options));
+        {
+            RegionLoops? traced = ExtractRegion(topology, regions, index, options);
+            if (traced is null) untraceable.Add(index);
+            else faces.Add(traced);
+        }
 
-        return result;
+        return new LoopExtraction(faces, untraceable);
     }
 
-    private static RegionLoops ExtractRegion(
+    private static RegionLoops? ExtractRegion(
         MeshTopology topology, RegionSet regions, int regionIndex, LoopOptions options)
     {
         PlanarRegion region = regions.Regions[regionIndex];
@@ -28,7 +41,13 @@ public static class LoopExtractor
         // different region - or when it has no partner at all, which is where
         // an open or non-manifold mesh shows up as an outline that will not
         // close.
-        Dictionary<int, int> successor = new();
+        //
+        // A vertex can have more than one way out. That happens where the
+        // region touches itself at a single point, so its outline passes
+        // through that vertex twice and comes away again along a different
+        // edge. Keeping only one of them - which an earlier version did - loses
+        // a whole loop and tears the rest.
+        Dictionary<int, List<int>> exits = new();
         foreach (var triangle in region.Triangles)
         {
             for (var corner = 0; corner < 3; corner++)
@@ -40,40 +59,45 @@ public static class LoopExtractor
                     : regions.RegionOfTriangle[opposite / 3];
 
                 if (neighbourRegion == regionIndex) continue;
-                successor[topology.From(halfEdge)] = halfEdge;
+
+                var from = topology.From(halfEdge);
+                if (!exits.TryGetValue(from, out List<int>? list)) exits[from] = list = [];
+                list.Add(halfEdge);
             }
         }
 
         List<Loop> loops = new();
-        HashSet<int> visited = new();
+        HashSet<int> taken = new();
+        var remaining = exits.Values.Sum(list => list.Count);
 
-        foreach (var start in successor.Keys.Order())
+        foreach (var first in exits.Keys.Order())
         {
-            if (!visited.Add(start)) continue;
-
-            List<int> vertices = new();
-            var current = start;
-            while (true)
+            while (remaining > 0 && NextExit(exits, taken, first) is { } startEdge)
             {
-                vertices.Add(current);
-                if (!successor.TryGetValue(current, out var halfEdge))
-                    throw new InvalidOperationException(
-                        $"the outline of region {regionIndex} does not close at vertex {current}");
+                List<int> vertices = [];
+                var edge = startEdge;
 
-                current = topology.To(halfEdge);
-                if (current == start) break;
+                while (true)
+                {
+                    taken.Add(edge);
+                    remaining--;
+                    vertices.Add(topology.From(edge));
 
-                if (!visited.Add(current))
-                    throw new InvalidOperationException(
-                        $"the outline of region {regionIndex} revisits vertex {current}");
+                    var next = topology.To(edge);
+                    if (next == first) break;
+
+                    // Torn outline: nowhere left to go, and not back where we
+                    // started. The region cannot be described as a face.
+                    if (NextExit(exits, taken, next) is not { } following) return null;
+                    edge = following;
+                }
+
+                List<int> simplified = Simplify(topology.Mesh, vertices, options.CollinearAngleRadians);
+                loops.Add(new Loop(simplified, SignedArea(topology.Mesh, simplified, region.Normal)));
             }
-
-            List<int> simplified = Simplify(topology.Mesh, vertices, options.CollinearAngleRadians);
-            loops.Add(new Loop(simplified, SignedArea(topology.Mesh, simplified, region.Normal)));
         }
 
-        if (loops.Count == 0)
-            throw new InvalidOperationException($"region {regionIndex} has no boundary");
+        if (loops.Count == 0) return null;
 
         // The outer boundary is the one enclosing the most area. Holes wind the
         // other way and therefore come out negative, so comparing the absolute
@@ -86,6 +110,21 @@ public static class LoopExtractor
         loops.RemoveAt(outerIndex);
 
         return new RegionLoops(regionIndex, outer, loops);
+    }
+
+    /// <summary>
+    /// An unused way out of the vertex, or null when every one is spent.
+    /// </summary>
+    private static int? NextExit(Dictionary<int, List<int>> exits, HashSet<int> taken, int vertex)
+    {
+        if (!exits.TryGetValue(vertex, out List<int>? candidates)) return null;
+
+        foreach (var candidate in candidates)
+        {
+            if (!taken.Contains(candidate)) return candidate;
+        }
+
+        return null;
     }
 
     /// <summary>
