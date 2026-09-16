@@ -16,7 +16,15 @@ internal static partial class OccBridge
 {
     private const string Module = "occ-bridge";
 
-    public static Task ImportAsync() => JSHost.ImportAsync(Module, "/js/occ-bridge.js");
+    /// <summary>
+    /// The URL is built from the application's base address rather than written
+    /// down as "/js/occ-bridge.js". The import is issued by the .NET runtime
+    /// rather than by the page, so a relative path would resolve against
+    /// _framework/, and an absolute one would miss the subfolder that GitHub
+    /// Pages serves the site from.
+    /// </summary>
+    public static Task ImportAsync(string baseAddress) =>
+        JSHost.ImportAsync(Module, $"{baseAddress}js/occ-bridge.js");
 
     [JSImport("initialize", Module)]
     public static partial Task<string> InitializeAsync();

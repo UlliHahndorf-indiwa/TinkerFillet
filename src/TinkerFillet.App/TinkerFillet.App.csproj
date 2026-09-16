@@ -25,6 +25,17 @@
     <ServiceWorker Include="wwwroot\service-worker.js" PublishedContent="wwwroot\service-worker.published.js" />
   </ItemGroup>
 
+  <!--
+    Useful in the working copy, dead weight in the download, so they are served
+    by the development server and left out of the published site: the sample
+    models that tools/make-test-stl.mjs writes, and the TypeScript declarations
+    of a library this project only ever calls from JavaScript.
+  -->
+  <ItemGroup>
+    <Content Update="wwwroot\dev\**" CopyToPublishDirectory="Never" />
+    <Content Update="wwwroot\lib\**\*.d.ts" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\TinkerFillet.Core\TinkerFillet.Core.csproj" />
   </ItemGroup>

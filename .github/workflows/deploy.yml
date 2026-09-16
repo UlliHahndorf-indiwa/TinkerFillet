@@ -1,0 +1,91 @@
+name: Deploy
+
+# Publishes the application to GitHub Pages.
+#
+# Two things have to be switched on once, by hand, before this can work:
+#   - the repository has to be public, because GitHub Free serves no Pages from
+#     a private repository
+#   - Settings > Pages > Source has to be set to "GitHub Actions"
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and a newer commit wins over one still building.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install the WebAssembly tools
+        run: dotnet workload install wasm-tools
+
+      - name: Test the algorithm core
+        run: dotnet test --configuration Release
+
+      - name: Test the CAD kernel layer
+        run: node --test "tests/occ/*.test.mjs"
+
+      # The site is served from https://<owner>.github.io/<repository>/, so the
+      # base has to name that folder. Written into the source before publishing
+      # rather than into the output afterwards: the integrity hashes in
+      # service-worker-assets.js are taken from the published files, and editing
+      # one of them after the fact breaks the offline cache on first install.
+      - name: Point the application at its subfolder
+        run: |
+          set -e
+          page="src/TinkerFillet.App/wwwroot/index.html"
+          grep -q '<base href="/" />' "$page"
+          sed -i 's|<base href="/" />|<base href="/${{ github.event.repository.name }}/" />|' "$page"
+          grep '<base href=' "$page"
+
+      - name: Publish
+        run: dotnet publish src/TinkerFillet.App/TinkerFillet.App.csproj --configuration Release --output publish
+
+      # Without this, a branch-based Pages deployment would run the output
+      # through Jekyll, which drops every folder whose name starts with an
+      # underscore - _framework among them. The Actions deployment below does
+      # not use Jekyll at all; the file costs nothing and covers the other route.
+      - name: Keep Jekyll off the output
+        run: touch publish/wwwroot/.nojekyll
+
+      # GitHub Pages knows nothing about client-side routing, so a reload of
+      # any address below the site would land on GitHub's own 404 page. Serving
+      # the application there instead hands the address back to its router. A
+      # copy, not an edit: index.html itself is hashed into
+      # service-worker-assets.js and has to stay exactly as it was published.
+      - name: Answer unknown addresses with the application
+        run: cp publish/wwwroot/index.html publish/wwwroot/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: publish/wwwroot
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

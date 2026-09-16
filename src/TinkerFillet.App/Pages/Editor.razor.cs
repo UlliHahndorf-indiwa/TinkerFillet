@@ -55,6 +55,10 @@ public partial class Editor : IAsyncDisposable
     private int _busySteps;
     private int _hovered = -1;
 
+    /// <summary>Only used for its base address - the application has one page.</summary>
+    [Inject]
+    public required NavigationManager Navigation { get; set; }
+
     private ChainOptions Chain => new(_featureAngle, ChainOptions.Default.KinkAngleDegrees);
 
     private FittingOptions Fitting => FittingOptions.Default with { MinimumFacets = _minimumFacets };
@@ -69,7 +73,7 @@ public partial class Editor : IAsyncDisposable
     {
         if (!first) return;
 
-        await OccBridge.ImportAsync();
+        await OccBridge.ImportAsync(Navigation.BaseUri);
         OccBridge.AttachViewport("viewport");
         _kernel = new WorkerKernelSession();
         _session = new FilletSession(_kernel, Chain);

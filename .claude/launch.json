@@ -12,6 +12,19 @@
         "http"
       ],
       "port": 5013
+    },
+    {
+      "name": "tinkerfillet-pages",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "E:/Web/TinkerFillet/tools/serve-publish.mjs",
+        "E:/Web/TinkerFillet/artifacts/pages/wwwroot",
+        "--base",
+        "/TinkerFillet/",
+        "--port",
+        "5099"
+      ],
+      "port": 5099
     }
   ]
 }

@@ -242,10 +242,14 @@ src/
       js/occ-bridge.js         Main-Thread-Seite, startet und überwacht Worker
       js/occ-worker.js         Worker: OCC laden, Recipe bauen, Fillet, Tessellieren
       js/viewport.js           Three.js-Szene, Kamera, ID-Puffer-Picking
-      manifest.webmanifest, service-worker.js, .nojekyll
+      manifest.webmanifest, service-worker.js
 tests/
   TinkerFillet.Core.Tests/     xUnit, läuft auf Desktop-.NET
   occ/                         node --test, testet occ-worker.js direkt
+tools/
+  make-test-stl.mjs            erzeugt die Beispielmodelle in wwwroot/dev
+  serve-publish.mjs            liefert ein Publish-Verzeichnis aus wie ein statischer Host
+.github/workflows/deploy.yml   Tests, Publish, GitHub Pages
 ```
 
 ### Konventionen
@@ -949,7 +953,17 @@ sonst scheitert das Vernähen.
 
 ### 3.1 Größten möglichen Radius vorschlagen
 Schlägt der Fillet fehl, Binärsuche zwischen 0 und dem angefragten Radius,
-6 Iterationen. Im Worker mit Fortschrittsanzeige, abbrechbar.
+6 Iterationen. Im Worker mit Fortschrittsanzeige.
+
+Gebaut als `largestWorkingRadius` in `occ-kernel.js`, aufgerufen über
+`largestRadius` im Worker. Die App fragt danach nur, wenn ein Fillet
+fehlgeschlagen ist, und meldet das Ergebnis als Hinweis.
+
+**Abweichung vom Entwurf: nicht abbrechbar.** Die Suche sind sechs Halbierungen
+im Worker, jede so teuer wie ein Fillet-Versuch. Ein Abbruch müsste den Worker
+abschießen und die Form danach aus der Feature-Liste neu aufbauen — mehr
+Mechanik als Wartezeit gespart wird. Wenn sich das bei großen Modellen anders
+anfühlt, ist der Worker-Neustart aus 1.13 der Hebel dafür.
 
 ### 3.2 Auslieferungsgröße prüfen
 Ersetzt den ursprünglich geplanten Custom-WASM-Build. `occt-wasm` ist bereits
@@ -960,9 +974,43 @@ einschleppen, die Stufe 1 und 2 bewusst nicht brauchen.
 Stattdessen: messen, was Brotli-Kompression und der Service-Worker-Cache real
 bringen, und erst dann entscheiden, ob mehr nötig ist.
 
+**Gemessen** an `dotnet publish -c Release`, ohne die `.br`/`.gz`-Dateien, die
+der Publish nebenher erzeugt:
+
+| | Größe |
+|---|---|
+| unkomprimiert ausgeliefert | 28,6 MB |
+| dieselben Dateien per gzip | 9,3 MB |
+| dieselben Dateien per Brotli | 6,7 MB |
+| davon der CAD-Kern `occt-wasm.wasm` | 21,2 MB roh, 6,8 MB gzip, 4,7 MB Brotli |
+
+Der Kern ist damit 74 % der Auslieferung. Der Rest verteilt sich auf Three.js
+(2,1 MB roh, ungebündelt, weil ein Tree-Shaking-Bundler npm bedeuten würde) und
+die .NET-Laufzeit samt Anwendung (rund 5 MB roh).
+
+Zwei Dinge wurden daraufhin aus dem Publish geworfen, weil sie nur im
+Arbeitsverzeichnis Sinn ergeben: die Beispielmodelle aus `wwwroot/dev` und die
+TypeScript-Deklarationen der vendorten Bibliotheken. Zusammen 1,8 MB.
+
+**Entscheidung: nichts weiter.** Der naheliegende nächste Schritt wäre, die
+`.wasm.gz` selbst zu laden und im Worker über `DecompressionStream` auszupacken
+— das spart beim allerersten Besuch 14 MB, unabhängig davon, was der Host
+komprimiert. Er kostet aber eine Sonderbehandlung im Service-Worker-Cache, einen
+Rückfallpfad für den Entwicklungsserver (dort gibt es kein `.gz`) und eine
+Erkennung, ob der Host die Datei bereits ausgepackt hat. Für ein Werkzeug, das
+einmal geladen und danach aus dem Cache gestartet wird, ist das zu viel
+Maschinerie. Der Hebel bleibt notiert, falls der erste Ladevorgang stört.
+
+**Offen bis zum ersten Deployment:** ob GitHub Pages `application/wasm`
+komprimiert ausliefert. Die vom Publish erzeugten `.br`/`.gz`-Dateien nutzt
+Pages nicht — es komprimiert selbst oder gar nicht. Davon hängen beim ersten
+Besuch 21 MB gegen 7 MB ab. In den Entwicklerwerkzeugen an einer einzigen
+Antwortkopfzeile ablesbar, sobald die Seite steht.
+
 ### 3.3 PWA / Offline / Deployment
 Blazor-PWA-Vorlage, Service Worker cacht .NET-Runtime, App und OCC-WASM.
-Statisches Deployment auf GitHub Pages.
+Statisches Deployment auf GitHub Pages über `.github/workflows/deploy.yml`:
+Tests, Publish, Artefakt, `deploy-pages`.
 
 Drei bekannte Stolperfallen, die eingeplant sind:
 - Das Repo muss **öffentlich** sein. GitHub Free liefert keine Pages aus
@@ -974,10 +1022,46 @@ Drei bekannte Stolperfallen, die eingeplant sind:
   Integritätsprüfung über `service-worker-assets.js` bricht sonst. Das
   `<base href>` wird über den Build gesetzt, nicht nachträglich editiert.
 
-Die vendorte OCC-`.wasm` (~35 MB) liegt damit im öffentlichen Repo. Unter dem
+Die vendorte OCC-`.wasm` (~22 MB) liegt damit im öffentlichen Repo. Unter dem
 100-MB-Limit von GitHub, wird selten aktualisiert — Git LFS ist nicht nötig.
 
 Modelle werden nie hochgeladen, die gesamte Rechnung passiert im Browser.
+
+#### Was der Unterordner kaputt gemacht hat
+
+Pages liefert eine Projektseite unter `/<Repo>/` aus, und daran ist alles
+gescheitert, was einen Pfad mit `/` anfängt. Gefunden und behoben:
+
+- `JSHost.ImportAsync(Module, "/js/occ-bridge.js")` hätte 404 geliefert. Der
+  Import wird nicht von der Seite ausgelöst, sondern von der .NET-Laufzeit —
+  ein relativer Pfad landet deshalb in `_framework/`, ein absoluter im
+  Wurzelverzeichnis. Jetzt aus `NavigationManager.BaseUri` gebaut.
+- Der Service Worker hatte `const base = "/"` aus der Vorlage. Jetzt aus
+  `self.location` abgeleitet.
+- `<base href>` setzt der Workflow vor dem Publish in die Quelldatei, nicht
+  danach in die Ausgabe.
+- Ein `404.html` (Kopie von `index.html`) gibt jede unbekannte Adresse an den
+  Router zurück, statt GitHubs eigene 404-Seite zu zeigen.
+
+Unproblematisch waren der Worker (`new URL("./occ-worker.js", import.meta.url)`)
+und das Laden der `.wasm` (Emscripten sucht relativ zum eigenen Modul).
+
+#### Wie das geprüft wurde
+
+`tools/serve-publish.mjs` liefert ein Publish-Verzeichnis so aus, wie ein
+dummer statischer Host es tut: kein Komprimieren, kein Ausweichen auf die
+`.br`- oder `.gz`-Datei daneben, und unter einem wählbaren Basispfad. Damit ist
+der Unterordner vor dem Deployment prüfbar statt danach.
+
+Geprüft wurde unter `http://localhost:5099/TinkerFillet/`: Anwendung startet,
+`js/occ-bridge.js` kommt aus dem Unterordner, Modell laden, Kante wählen,
+verrunden, Service Worker registriert sich mit dem Gültigkeitsbereich des
+Unterordners und legt 64 Einträge in den Cache — alle unter `/TinkerFillet/`.
+
+Danach **Server gestoppt und neu geladen**: die Anwendung startet vollständig
+aus dem Cache, lädt ein Modell, baut den Solid und verrundet eine Kante. Das
+ist der eigentliche Beweis für 3.3 — ohne laufenden Server ist auch der
+22-MB-Kern nur noch Cache.
 
 ---
 
