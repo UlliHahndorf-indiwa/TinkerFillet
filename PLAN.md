@@ -498,10 +498,22 @@ Eine Seite, kein Navigieren.
 - Toolbar: Laden, Regler `FeatureAngle`, STL exportieren
 - Tastatur: `Esc` bricht Auswahl ab, `Cmd/Ctrl+Z`, `Cmd/Ctrl+Shift+Z`
 
-**Picking** in `viewport.js`: Kanten zusätzlich als dicke Linien in einen
-Offscreen-Puffer rendern, jede in eindeutiger ID-Farbe. Klick liest ein Pixel →
-Kanten-Id, die an C# gemeldet wird. Unabhängig vom Blickwinkel, kein Raycast
-gegen dünne Linien.
+**Radiuseingabe**: Textfeld, kein `type="number"`. Ein Zahlenfeld parst gegen
+die HTML-Fließkommagrammatik, in der kein Komma vorkommt — ein getipptes Komma
+leert das Feld, bevor irgendein Code es sieht. Also Text, und `RadiusText`
+nimmt beide Trennzeichen an und schreibt mit Komma zurück. Die Pfeiltasten, die
+ein Zahlenfeld geschenkt hätte, macht es selbst: ±0,5 mm. In der Feature-Liste
+verschieben sie nur die Anzeige und werden erst mit Eingabe oder beim Verlassen
+übernommen — jeder übernommene Radius baut die Form neu, und eine gedrückt
+gehaltene Pfeiltaste würde einen Neuaufbau pro Anschlag auslösen.
+
+**Picking** in `viewport.js`: Kanten in einen Offscreen-Puffer rendern, jede in
+eindeutiger ID-Farbe. Klick liest ein Pixel → Kanten-Id, die an C# gemeldet
+wird. Unabhängig vom Blickwinkel, kein Raycast gegen dünne Linien.
+
+Der ursprüngliche Zusatz „als dicke Linien" ist gestrichen: WebGL zeichnet jede
+Linie einen Pixel breit und ignoriert `linewidth`. Die Toleranz kommt stattdessen
+aus der Pixelsuche um den Cursor — siehe „Kante anklicken".
 
 **Kein Live-Preview im Radius-Dialog.** Dialog nimmt die Zahl, rechnet, zeigt
 das Ergebnis. Nachjustiert wird über das Radius-Feld in der Feature-Liste.

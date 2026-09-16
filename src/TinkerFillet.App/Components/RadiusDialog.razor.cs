@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 
@@ -30,10 +29,9 @@ public partial class RadiusDialog
 
     private async Task Confirm()
     {
-        if (!double.TryParse(_radiusText, NumberStyles.Float, CultureInfo.InvariantCulture, out var radius)
-            || radius <= 0)
+        if (!RadiusText.TryParse(_radiusText, out var radius) || radius <= 0)
         {
-            _error = "Bitte einen Radius größer als 0 eingeben.";
+            _error = "Bitte einen Radius größer als 0 eingeben. Komma oder Punkt.";
             return;
         }
 
@@ -45,13 +43,34 @@ public partial class RadiusDialog
 
     private async Task OnKey(KeyboardEventArgs args)
     {
-        if (args.Key == "Enter")
+        switch (args.Key)
         {
-            await Confirm();
+            case "Enter":
+                await Confirm();
+                break;
+            case "Escape":
+                await Cancel();
+                break;
+            case "ArrowUp":
+                Step(1);
+                break;
+            case "ArrowDown":
+                Step(-1);
+                break;
         }
-        else if (args.Key == "Escape")
-        {
-            await Cancel();
-        }
+    }
+
+    /// <summary>
+    /// Moves the value by one step, leaving anything unreadable alone. The
+    /// caret jumping to one end of the field is the browser's own doing and is
+    /// left as it is: suppressing the key would take a blanket preventDefault
+    /// on keydown, which would stop the user typing at all.
+    /// </summary>
+    private void Step(int direction)
+    {
+        if (!RadiusText.TryParse(_radiusText, out var radius)) return;
+
+        _radiusText = RadiusText.Format(RadiusText.Nudge(radius, direction));
+        _error = null;
     }
 }

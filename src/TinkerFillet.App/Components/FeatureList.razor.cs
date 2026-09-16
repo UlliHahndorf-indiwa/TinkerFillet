@@ -1,11 +1,22 @@
-using System.Globalization;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using TinkerFillet.Core.History;
 
 namespace TinkerFillet.App.Components;
 
 public partial class FeatureList
 {
+    /// <summary>
+    /// Text the user is still working on, by feature.
+    ///
+    /// The arrow keys move the number in the field without applying it. Every
+    /// applied radius rebuilds the whole shape, which is a second's work on a
+    /// real model, and holding an arrow key would queue one rebuild per press.
+    /// So the field is edited here and committed once, on Enter or on leaving
+    /// it - the same moment typing a number has always taken effect.
+    /// </summary>
+    private readonly Dictionary<Guid, string> _editing = [];
+
     [Parameter, EditorRequired]
     public IReadOnlyList<FilletFeature> Features { get; set; } = [];
 
@@ -31,15 +42,41 @@ public partial class FeatureList
 
     private Task Redo() => OnRedo.InvokeAsync();
 
-    private Task ChangeRadius(FilletFeature feature, string? entered)
+    private string TextFor(FilletFeature feature) =>
+        _editing.TryGetValue(feature.Id, out var text) ? text : RadiusText.Format(feature.Radius);
+
+    private Task OnKey(FilletFeature feature, KeyboardEventArgs args)
     {
-        // Invariant culture: the input element reports a dot even on a German
-        // system, and parsing it with the current culture would read 1.5 as 15.
-        if (!double.TryParse(entered, NumberStyles.Float, CultureInfo.InvariantCulture, out var radius)
-            || radius <= 0)
+        switch (args.Key)
         {
-            return Task.CompletedTask;
+            case "ArrowUp":
+                Step(feature, 1);
+                return Task.CompletedTask;
+            case "ArrowDown":
+                Step(feature, -1);
+                return Task.CompletedTask;
+            case "Enter":
+                return Commit(feature, TextFor(feature));
+            case "Escape":
+                _editing.Remove(feature.Id);
+                return Task.CompletedTask;
+            default:
+                return Task.CompletedTask;
         }
+    }
+
+    private void Step(FilletFeature feature, int direction)
+    {
+        if (!RadiusText.TryParse(TextFor(feature), out var radius)) return;
+
+        _editing[feature.Id] = RadiusText.Format(RadiusText.Nudge(radius, direction));
+    }
+
+    private Task Commit(FilletFeature feature, string? entered)
+    {
+        _editing.Remove(feature.Id);
+
+        if (!RadiusText.TryParse(entered, out var radius) || radius <= 0) return Task.CompletedTask;
 
         return radius == feature.Radius
             ? Task.CompletedTask
