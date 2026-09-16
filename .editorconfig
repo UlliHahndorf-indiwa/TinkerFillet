@@ -20,20 +20,22 @@ trim_trailing_whitespace = false
 # See code-styleguide.md. The rules below are the ones that document decisions
 # rather than taste, so a tool can hold them rather than a reviewer.
 
-# Explicit types everywhere. Anonymous types are the one case the language does
-# not allow one, and the codebase does not use any.
-csharp_style_var_for_built_in_types = false:warning
-csharp_style_var_when_type_is_apparent = false:warning
+# var where the type is already on the line, the type spelled out where it is
+# not. Reading "not obvious" as "you cannot see it in the initialiser":
+#   var faces = new List<RecipeFace>();   the type is right there
+#   var dx = maxX - minX;                 arithmetic on doubles
+#   IndexedMesh mesh = Welder.Weld(...);  nothing here says what comes back
+csharp_style_var_for_built_in_types = true:warning
+csharp_style_var_when_type_is_apparent = true:warning
 csharp_style_var_elsewhere = false:warning
 dotnet_diagnostic.IDE0007.severity = warning
 dotnet_diagnostic.IDE0008.severity = warning
 
-# The declared type already says what is being built, so the constructor call
-# need not repeat it. Without this, banning var turns
-#   var b = new Dictionary<(long, long, long), List<int>>();
-# into the same generic argument list written out twice.
-csharp_style_implicit_object_creation_when_type_is_apparent = true:warning
-dotnet_diagnostic.IDE0090.severity = warning
+# Off rather than false, because the two preferences describe the same line and
+# would otherwise pull against each other: preferring var on the left wants the
+# type written on the right, and preferring new() on the right wants it written
+# on the left. Either spelling reads fine, so neither is worth a warning.
+dotnet_diagnostic.IDE0090.severity = none
 
 # An unused using is dead weight; the split into one type per file left plenty.
 dotnet_diagnostic.IDE0005.severity = warning

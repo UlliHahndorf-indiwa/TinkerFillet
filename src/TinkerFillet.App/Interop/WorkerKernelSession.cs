@@ -30,7 +30,7 @@ internal sealed class WorkerKernelSession : IKernelSession
 
     public async Task<KernelState> ResetAsync(BrepRecipe recipe, CancellationToken cancellationToken = default)
     {
-        string answer = await OccBridge.ResetAsync(JsonSerializer.Serialize(recipe, Json));
+        var answer = await OccBridge.ResetAsync(JsonSerializer.Serialize(recipe, Json));
         return Parse(answer);
     }
 
@@ -39,7 +39,7 @@ internal sealed class WorkerKernelSession : IKernelSession
     {
         try
         {
-            string answer = await OccBridge.FilletAsync(handle, JsonSerializer.Serialize(edgeIds, Json), radius);
+            var answer = await OccBridge.FilletAsync(handle, JsonSerializer.Serialize(edgeIds, Json), radius);
             return Parse(answer);
         }
         // Fully qualified on purpose. There are two types called JSException:

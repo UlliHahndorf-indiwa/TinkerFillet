@@ -99,21 +99,21 @@ public class ConeFitterTests
     {
         TriangleSoup soup = MeshFixtures.Cone(sides: 32, bottomRadius: 9, topRadius: 3, height: 14);
         IndexedMesh mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
-        MeshTopology topology = MeshTopology.Build(mesh);
+        var topology = MeshTopology.Build(mesh);
         RegionSet regions = RegionGrower.Grow(topology, RegionOptions.ForModel(mesh));
         ConeFit fit = PrimitiveFitter.FindCones(topology, regions, FittingOptions.Default, [])[0];
 
-        double slope = (fit.BottomRadius - fit.TopRadius) / fit.Height;
+        var slope = (fit.BottomRadius - fit.TopRadius) / fit.Height;
 
-        foreach (int index in fit.RegionIndices)
+        foreach (var index in fit.RegionIndices)
         {
-            foreach (int triangle in regions.Regions[index].Triangles)
+            foreach (var triangle in regions.Regions[index].Triangles)
             {
-                for (int corner = 0; corner < 3; corner++)
+                for (var corner = 0; corner < 3; corner++)
                 {
                     Vec3 offset = mesh.CornerPosition(triangle, corner) - fit.BasePoint;
-                    double along = offset.Dot(fit.Axis);
-                    double radial = (offset - fit.Axis * along).Length;
+                    var along = offset.Dot(fit.Axis);
+                    var radial = (offset - fit.Axis * along).Length;
                     Assert.Equal(fit.BottomRadius - slope * along, radial, 6);
                 }
             }
@@ -127,7 +127,7 @@ public class ConeFitterTests
         // with its apex at infinity, and one shape cannot be both.
         TriangleSoup soup = MeshFixtures.Prism(sides: 24);
         IndexedMesh mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
-        MeshTopology topology = MeshTopology.Build(mesh);
+        var topology = MeshTopology.Build(mesh);
         RegionSet regions = RegionGrower.Grow(topology, RegionOptions.ForModel(mesh));
         IReadOnlyList<CylinderFit> cylinders = PrimitiveFitter.FindCylinders(topology, regions, FittingOptions.Default);
 
@@ -166,22 +166,22 @@ public class ConeFitterTests
 
         Vec3 On(int band, int segment)
         {
-            double phi = Math.PI * band / bands;
-            double theta = 2 * Math.PI * segment / bands;
+            var phi = Math.PI * band / bands;
+            var theta = 2 * Math.PI * segment / bands;
             return new Vec3(
                 Math.Sin(phi) * Math.Cos(theta),
                 Math.Sin(phi) * Math.Sin(theta),
                 Math.Cos(phi)) * radius;
         }
 
-        for (int band = 0; band < bands; band++)
+        for (var band = 0; band < bands; band++)
         {
-            for (int segment = 0; segment < bands; segment++)
+            for (var segment = 0; segment < bands; segment++)
             {
                 Vec3[] corners = [On(band, segment), On(band + 1, segment),
                                   On(band + 1, segment + 1), On(band, segment + 1)];
-                foreach (int[]? triangle in new[] { new[] { 0, 1, 2 }, new[] { 0, 2, 3 } })
-                    foreach (int corner in triangle)
+                foreach (var triangle in new[] { new[] { 0, 1, 2 }, new[] { 0, 2, 3 } })
+                    foreach (var corner in triangle)
                         positions.AddRange([corners[corner].X, corners[corner].Y, corners[corner].Z]);
             }
         }
@@ -192,7 +192,7 @@ public class ConeFitterTests
     private static IReadOnlyList<ConeFit> Fit(TriangleSoup soup, FittingOptions? options = null)
     {
         IndexedMesh mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
-        MeshTopology topology = MeshTopology.Build(mesh);
+        var topology = MeshTopology.Build(mesh);
         RegionSet regions = RegionGrower.Grow(topology, RegionOptions.ForModel(mesh));
         return PrimitiveFitter.FindCones(topology, regions, options ?? FittingOptions.Default, []);
     }

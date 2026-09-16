@@ -24,17 +24,17 @@ public static class RegionGrower
     public static RegionSet Grow(MeshTopology topology, RegionOptions options)
     {
         IndexedMesh mesh = topology.Mesh;
-        int[] regionOfTriangle = new int[mesh.TriangleCount];
+        var regionOfTriangle = new int[mesh.TriangleCount];
         Array.Fill(regionOfTriangle, -1);
 
         List<PlanarRegion> regions = new();
         Queue<int> queue = new();
 
-        for (int seed = 0; seed < mesh.TriangleCount; seed++)
+        for (var seed = 0; seed < mesh.TriangleCount; seed++)
         {
             if (regionOfTriangle[seed] >= 0) continue;
 
-            int regionIndex = regions.Count;
+            var regionIndex = regions.Count;
             List<int> members = new();
             RunningPlane plane = new(mesh, seed);
 
@@ -45,17 +45,17 @@ public static class RegionGrower
 
             while (queue.Count > 0)
             {
-                int triangle = queue.Dequeue();
+                var triangle = queue.Dequeue();
 
-                for (int corner = 0; corner < 3; corner++)
+                for (var corner = 0; corner < 3; corner++)
                 {
-                    int opposite = topology.Opposite[triangle * 3 + corner];
+                    var opposite = topology.Opposite[triangle * 3 + corner];
 
                     // An unpaired half-edge is a hole or a non-manifold
                     // junction. A face cannot be grown across either.
                     if (opposite == MeshTopology.NoOpposite) continue;
 
-                    int neighbour = opposite / 3;
+                    var neighbour = opposite / 3;
                     if (regionOfTriangle[neighbour] >= 0) continue;
                     if (!plane.Accepts(neighbour, options)) continue;
 
@@ -121,8 +121,8 @@ public static class RegionGrower
             // would therefore split exactly the big flat faces this stage
             // exists to recover.
             Vec3 centroid = _mesh.TriangleCentroid(triangle);
-            double extent = Extent(triangle, centroid);
-            double allowance = options.PlaneDistance + extent * Math.Sin(options.PlaneAngleRadians);
+            var extent = Extent(triangle, centroid);
+            var allowance = options.PlaneDistance + extent * Math.Sin(options.PlaneAngleRadians);
 
             return Math.Abs(centroid.Dot(Normal) - Offset) <= allowance;
         }
@@ -130,8 +130,8 @@ public static class RegionGrower
         /// <summary>Distance from the centroid to the farthest of the triangle's corners.</summary>
         private double Extent(int triangle, Vec3 centroid)
         {
-            double farthest = 0.0;
-            for (int corner = 0; corner < 3; corner++)
+            var farthest = 0.0;
+            for (var corner = 0; corner < 3; corner++)
                 farthest = Math.Max(farthest, (_mesh.CornerPosition(triangle, corner) - centroid).Length);
             return farthest;
         }
@@ -141,7 +141,7 @@ public static class RegionGrower
             // The unnormalised normal's length is twice the triangle's area, so
             // accumulating it directly gives the area weighting for free.
             Vec3 normal = _mesh.TriangleNormal(triangle);
-            double area = normal.Length / 2;
+            var area = normal.Length / 2;
 
             _weightedNormal += normal;
             _weightedCentroid += _mesh.TriangleCentroid(triangle) * area;

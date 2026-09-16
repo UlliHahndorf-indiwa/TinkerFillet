@@ -48,7 +48,7 @@ public class ReconstructorCylinderTests
         const double height = 10;
         ReconstructionResult result = Reconstructor.Reconstruct(MeshFixtures.Prism(sides: 20, height: height));
 
-        List<double> heights = result.Recipe.Faces
+        var heights = result.Recipe.Faces
             .Where(face => face.Kind == SurfaceKind.Plane)
             .Select(face => face.CircleParametersOf(face.Outer).Centre.Z)
             .Order()
@@ -63,7 +63,7 @@ public class ReconstructorCylinderTests
     {
         ReconstructionResult result = Reconstructor.Reconstruct(MeshFixtures.Prism(sides: 20));
 
-        List<double> normals = result.Recipe.Faces
+        var normals = result.Recipe.Faces
             .Where(face => face.Kind == SurfaceKind.Plane)
             .Select(face => face.CircleParametersOf(face.Outer).Normal.Z)
             .ToList();
@@ -135,7 +135,7 @@ public class ReconstructorCylinderTests
         const double height = 15;
         ReconstructionResult result = Reconstructor.Reconstruct(MeshFixtures.Prism(sides: 20, height: height));
 
-        double[] parameters = result.Recipe.Faces.Single(face => face.Kind == SurfaceKind.Cylinder).SurfaceParameters;
+        var parameters = result.Recipe.Faces.Single(face => face.Kind == SurfaceKind.Cylinder).SurfaceParameters;
 
         Assert.Equal(8, parameters.Length);
         Assert.Equal(1, Math.Abs(parameters[5]), 6); // axis is +/- Z
@@ -162,7 +162,7 @@ public class ReconstructorCylinderTests
         ReconstructionResult result = Reconstructor.Reconstruct(
             MeshFixtures.Cone(sides: 24, bottomRadius: 12, topRadius: 5, height: 10));
 
-        double[] parameters = result.Recipe.Faces.Single(face => face.Kind == SurfaceKind.Cone).SurfaceParameters;
+        var parameters = result.Recipe.Faces.Single(face => face.Kind == SurfaceKind.Cone).SurfaceParameters;
 
         Assert.Equal(9, parameters.Length);
         Assert.Equal(12, parameters[6], 6); // bottom radius
@@ -176,10 +176,10 @@ public class ReconstructorCylinderTests
         ReconstructionResult result = Reconstructor.Reconstruct(
             MeshFixtures.Cone(sides: 24, bottomRadius: 12, topRadius: 5, height: 10));
 
-        List<RecipeFace> caps = result.Recipe.Faces.Where(face => face.Kind == SurfaceKind.Plane).ToList();
+        var caps = result.Recipe.Faces.Where(face => face.Kind == SurfaceKind.Plane).ToList();
 
         Assert.Equal(2, caps.Count);
-        List<double> radii = caps.Select(cap => cap.CircleParametersOf(cap.Outer).Radius).Order().ToList();
+        var radii = caps.Select(cap => cap.CircleParametersOf(cap.Outer).Radius).Order().ToList();
         Assert.Equal(5, radii[0], 6);
         Assert.Equal(12, radii[1], 6);
     }
@@ -201,7 +201,7 @@ file static class RecipeFaceExtensions
     public static (Vec3 Centre, Vec3 Normal, double Radius) CircleParametersOf(this RecipeFace _, RecipeLoop loop)
     {
         Assert.Equal(LoopKind.Circle, loop.Kind);
-        double[] p = loop.CircleParameters;
+        var p = loop.CircleParameters;
         return (new Vec3(p[0], p[1], p[2]), new Vec3(p[3], p[4], p[5]), p[6]);
     }
 }

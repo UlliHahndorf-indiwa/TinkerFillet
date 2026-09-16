@@ -53,7 +53,7 @@ public static class ChainPropagator
     {
         List<int> collected = new();
         EdgeInfo current = from;
-        int? vertex = startVertex;
+        var vertex = startVertex;
 
         while (vertex is { } at)
         {
@@ -84,7 +84,7 @@ public static class ChainPropagator
     {
         if (!incident.TryGetValue(vertex, out List<int>? candidates)) return null;
 
-        List<EdgeInfo> sharp = candidates
+        var sharp = candidates
             .Where(id => id != current.Id)
             .Select(id => graph[id])
             .Where(edge => IsFeature(edge, options))
@@ -101,7 +101,7 @@ public static class ChainPropagator
         // Two features that merely touch at a point are not one feature.
         if (!current.Faces.Intersect(candidate.Faces).Any()) return null;
 
-        double kink = KinkAt(graph, vertex, current, candidate) * 180 / Math.PI;
+        var kink = KinkAt(graph, vertex, current, candidate) * 180 / Math.PI;
         return kink <= options.KinkAngleDegrees ? candidate : null;
     }
 
@@ -130,7 +130,7 @@ public static class ChainPropagator
         Dictionary<int, List<int>> index = new();
         foreach (EdgeInfo edge in graph.Edges)
         {
-            foreach (int vertex in edge.Vertices)
+            foreach (var vertex in edge.Vertices)
             {
                 if (!index.TryGetValue(vertex, out List<int>? list)) index[vertex] = list = [];
                 list.Add(edge.Id);
@@ -145,7 +145,7 @@ public static class ChainPropagator
 
     private static int? OtherEndpoint(EdgeInfo edge, int vertex)
     {
-        foreach (int candidate in edge.Vertices)
+        foreach (var candidate in edge.Vertices)
             if (candidate != vertex) return candidate;
         return null;
     }

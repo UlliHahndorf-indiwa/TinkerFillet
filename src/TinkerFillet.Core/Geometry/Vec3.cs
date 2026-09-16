@@ -37,14 +37,14 @@ public readonly record struct Vec3(double X, double Y, double Z)
     /// </summary>
     public Vec3 Normalized()
     {
-        double length = Length;
+        var length = Length;
         return length < 1e-20 ? Zero : this / length;
     }
 
     /// <summary>Angle to another direction in radians, clamped against rounding drift.</summary>
     public double AngleTo(Vec3 other)
     {
-        double denominator = Length * other.Length;
+        var denominator = Length * other.Length;
         if (denominator < 1e-20) return 0;
         return Math.Acos(Math.Clamp(Dot(other) / denominator, -1.0, 1.0));
     }

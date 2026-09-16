@@ -9,7 +9,7 @@ public class StlReaderTests
     [Fact]
     public void ReadsBinaryTriangle()
     {
-        byte[] bytes = StlFixtures.Binary([StlFixtures.SampleTriangle]);
+        var bytes = StlFixtures.Binary([StlFixtures.SampleTriangle]);
 
         TriangleSoup soup = StlReader.Read(bytes);
 
@@ -20,7 +20,7 @@ public class StlReaderTests
     [Fact]
     public void ReadsAsciiTriangle()
     {
-        byte[] bytes = StlFixtures.Ascii([StlFixtures.SampleTriangle]);
+        var bytes = StlFixtures.Ascii([StlFixtures.SampleTriangle]);
 
         TriangleSoup soup = StlReader.Read(bytes);
 
@@ -34,7 +34,7 @@ public class StlReaderTests
         // Several exporters write "solid <name>" into the binary header, so
         // sniffing the first five bytes misclassifies their files. The size
         // relationship is the only reliable signal.
-        byte[] bytes = StlFixtures.Binary([StlFixtures.SampleTriangle], header: "solid exported by something");
+        var bytes = StlFixtures.Binary([StlFixtures.SampleTriangle], header: "solid exported by something");
 
         TriangleSoup soup = StlReader.Read(bytes);
 
@@ -76,8 +76,8 @@ public class StlReaderTests
     [Fact]
     public void TruncatedBinaryFileIsRejectedWithAUsefulMessage()
     {
-        byte[] bytes = StlFixtures.Binary([StlFixtures.SampleTriangle]);
-        byte[] truncated = bytes[..^10];
+        var bytes = StlFixtures.Binary([StlFixtures.SampleTriangle]);
+        var truncated = bytes[..^10];
 
         StlFormatException error = Assert.Throws<StlFormatException>(() => StlReader.Read(truncated));
 
@@ -93,7 +93,7 @@ public class StlReaderTests
     [Fact]
     public void AsciiFacetWithTooFewVerticesIsRejected()
     {
-        byte[] broken = """
+        var broken = """
             solid test
               facet normal 0 0 0
                 outer loop

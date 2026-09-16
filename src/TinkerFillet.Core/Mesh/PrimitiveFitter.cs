@@ -19,7 +19,7 @@ public static class PrimitiveFitter
         HashSet<int> used = new();
         List<CylinderFit> found = new();
 
-        for (int seed = 0; seed < regions.Regions.Count; seed++)
+        for (var seed = 0; seed < regions.Regions.Count; seed++)
         {
             if (used.Contains(seed) || !junctions.TryGetValue(seed, out Dictionary<int, Junction>? atSeed)) continue;
 
@@ -36,7 +36,7 @@ public static class PrimitiveFitter
                 if (fit is null) continue;
 
                 found.Add(fit);
-                foreach (int region in component) used.Add(region);
+                foreach (var region in component) used.Add(region);
                 break;
             }
         }
@@ -58,13 +58,13 @@ public static class PrimitiveFitter
         Dictionary<(int A, int B), List<Vec3>> shared = new();
         Dictionary<(int A, int B), Vec3> somePoint = new();
 
-        for (int halfEdge = 0; halfEdge < topology.HalfEdgeCount; halfEdge++)
+        for (var halfEdge = 0; halfEdge < topology.HalfEdgeCount; halfEdge++)
         {
-            int opposite = topology.Opposite[halfEdge];
+            var opposite = topology.Opposite[halfEdge];
             if (opposite == MeshTopology.NoOpposite) continue;
 
-            int here = regions.RegionOfTriangle[halfEdge / 3];
-            int there = regions.RegionOfTriangle[opposite / 3];
+            var here = regions.RegionOfTriangle[halfEdge / 3];
+            var there = regions.RegionOfTriangle[opposite / 3];
             if (here >= there) continue; // record each pair once
 
             Vec3 direction = (mesh.Vertex(topology.To(halfEdge)) - mesh.Vertex(topology.From(halfEdge))).Normalized();
@@ -76,10 +76,10 @@ public static class PrimitiveFitter
         }
 
         Dictionary<int, Dictionary<int, Junction>> result = new();
-        foreach (((int a, int b), List<Vec3>? directions) in shared)
+        foreach (((var a, var b), List<Vec3>? directions) in shared)
         {
             Vec3 reference = directions[0];
-            bool straight = directions.All(direction => AreParallel(direction, reference, 1e-6));
+            var straight = directions.All(direction => AreParallel(direction, reference, 1e-6));
             if (!straight) continue;
 
             Add(a, b, reference, somePoint[(a, b)]);
@@ -109,7 +109,7 @@ public static class PrimitiveFitter
 
         while (queue.Count > 0)
         {
-            int region = queue.Dequeue();
+            var region = queue.Dequeue();
             component.Add(region);
 
             if (!junctions.TryGetValue(region, out Dictionary<int, Junction>? neighbours)) continue;
@@ -138,11 +138,11 @@ public static class PrimitiveFitter
         Dictionary<int, Dictionary<int, Junction>> junctions,
         FittingOptions options)
     {
-        HashSet<int> inComponent = component.ToHashSet();
+        var inComponent = component.ToHashSet();
 
-        foreach (int region in component)
+        foreach (var region in component)
         {
-            int neighbours = junctions[region].Values.Count(junction =>
+            var neighbours = junctions[region].Values.Count(junction =>
                 inComponent.Contains(junction.Other)
                 && AreParallel(junction.Direction, axis, options.AxisAngleTolerance));
 
@@ -168,7 +168,7 @@ public static class PrimitiveFitter
         (Vec3 u, Vec3 v) = BasisPerpendicularTo(axis);
         Vec3 origin = Average(vertices);
 
-        List<(double, double)> flat = vertices
+        var flat = vertices
             .Select(vertex => ((vertex - origin).Dot(u), (vertex - origin).Dot(v)))
             .ToList();
 
@@ -179,15 +179,15 @@ public static class PrimitiveFitter
         // the circle through them is the radius the designer drew. Fitting the
         // facet planes instead would give the inscribed radius and shrink every
         // hole by a percent or more.
-        foreach ((double x, double y) in flat)
+        foreach ((var x, var y) in flat)
         {
-            double deviation = Math.Abs(Math.Sqrt((x - cu) * (x - cu) + (y - cv) * (y - cv)) - radius);
+            var deviation = Math.Abs(Math.Sqrt((x - cu) * (x - cu) + (y - cv) * (y - cv)) - radius);
             if (deviation > options.RadiusTolerance * radius) return null;
         }
 
         Vec3 centre = origin + u * cu + v * cv;
-        List<double> along = vertices.Select(vertex => (vertex - centre).Dot(axis)).ToList();
-        double lowest = along.Min();
+        var along = vertices.Select(vertex => (vertex - centre).Dot(axis)).ToList();
+        var lowest = along.Min();
 
         return new CylinderFit(
             component,
@@ -210,9 +210,9 @@ public static class PrimitiveFitter
         IndexedMesh mesh, RegionSet regions, List<int> component, Vec3 centre, Vec3 axis)
     {
         // Weighted by area, so one sliver cannot outvote the rest.
-        double vote = 0.0;
+        var vote = 0.0;
 
-        foreach (int index in component)
+        foreach (var index in component)
         {
             PlanarRegion region = regions.Regions[index];
             Vec3 centroid = Average([.. region.Triangles.Select(mesh.TriangleCentroid)]);
@@ -231,11 +231,11 @@ public static class PrimitiveFitter
         Dictionary<int, Dictionary<int, Junction>> junctions,
         FittingOptions options)
     {
-        HashSet<int> inComponent = component.ToHashSet();
+        var inComponent = component.ToHashSet();
         Vec3? reference = null;
         Vec3 sum = Vec3.Zero;
 
-        foreach (int region in component)
+        foreach (var region in component)
         {
             foreach (Junction junction in junctions[region].Values)
             {
@@ -260,11 +260,11 @@ public static class PrimitiveFitter
     private static (double X, double Y, double Radius)? FitCircle(List<(double X, double Y)> points)
     {
         double sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0, sz = 0, sxz = 0, syz = 0;
-        int n = points.Count;
+        var n = points.Count;
 
-        foreach ((double x, double y) in points)
+        foreach ((var x, var y) in points)
         {
-            double z = x * x + y * y;
+            var z = x * x + y * y;
             sx += x; sy += y; sz += z;
             sxx += x * x; syy += y * y; sxy += x * y;
             sxz += x * z; syz += y * z;
@@ -273,12 +273,12 @@ public static class PrimitiveFitter
         double[,] matrix = { { sxx, sxy, sx }, { sxy, syy, sy }, { sx, sy, n } };
         double[] right = { -sxz, -syz, -sz };
 
-        double[]? solution = Solve3(matrix, right);
+        var solution = Solve3(matrix, right);
         if (solution is null) return null;
 
-        double centreX = -solution[0] / 2;
-        double centreY = -solution[1] / 2;
-        double squared = centreX * centreX + centreY * centreY - solution[2];
+        var centreX = -solution[0] / 2;
+        var centreY = -solution[1] / 2;
+        var squared = centreX * centreX + centreY * centreY - solution[2];
 
         return squared <= 0 ? null : (centreX, centreY, Math.Sqrt(squared));
     }
@@ -286,33 +286,33 @@ public static class PrimitiveFitter
     /// <summary>Gaussian elimination with partial pivoting; null when the system is degenerate.</summary>
     private static double[]? Solve3(double[,] a, double[] b)
     {
-        for (int column = 0; column < 3; column++)
+        for (var column = 0; column < 3; column++)
         {
-            int pivot = column;
-            for (int row = column + 1; row < 3; row++)
+            var pivot = column;
+            for (var row = column + 1; row < 3; row++)
                 if (Math.Abs(a[row, column]) > Math.Abs(a[pivot, column])) pivot = row;
 
             if (Math.Abs(a[pivot, column]) < 1e-12) return null;
 
             if (pivot != column)
             {
-                for (int k = 0; k < 3; k++) (a[column, k], a[pivot, k]) = (a[pivot, k], a[column, k]);
+                for (var k = 0; k < 3; k++) (a[column, k], a[pivot, k]) = (a[pivot, k], a[column, k]);
                 (b[column], b[pivot]) = (b[pivot], b[column]);
             }
 
-            for (int row = column + 1; row < 3; row++)
+            for (var row = column + 1; row < 3; row++)
             {
-                double factor = a[row, column] / a[column, column];
-                for (int k = column; k < 3; k++) a[row, k] -= factor * a[column, k];
+                var factor = a[row, column] / a[column, column];
+                for (var k = column; k < 3; k++) a[row, k] -= factor * a[column, k];
                 b[row] -= factor * b[column];
             }
         }
 
-        double[] result = new double[3];
-        for (int row = 2; row >= 0; row--)
+        var result = new double[3];
+        for (var row = 2; row >= 0; row--)
         {
-            double sum = b[row];
-            for (int k = row + 1; k < 3; k++) sum -= a[row, k] * result[k];
+            var sum = b[row];
+            for (var k = row + 1; k < 3; k++) sum -= a[row, k] * result[k];
             result[row] = sum / a[row, row];
         }
 
@@ -322,9 +322,9 @@ public static class PrimitiveFitter
     private static List<Vec3> DistinctVertices(IndexedMesh mesh, RegionSet regions, List<int> component)
     {
         HashSet<int> indices = new();
-        foreach (int index in component)
-            foreach (int triangle in regions.Regions[index].Triangles)
-                for (int corner = 0; corner < 3; corner++)
+        foreach (var index in component)
+            foreach (var triangle in regions.Regions[index].Triangles)
+                for (var corner = 0; corner < 3; corner++)
                     indices.Add(mesh.Corner(triangle, corner));
 
         return [.. indices.Select(mesh.Vertex)];
@@ -366,22 +366,22 @@ public static class PrimitiveFitter
         MeshTopology topology, RegionSet regions, FittingOptions options, IReadOnlyList<int> alreadyClaimed)
     {
         Dictionary<int, Dictionary<int, Junction>> junctions = FindJunctions(topology, regions);
-        HashSet<int> used = alreadyClaimed.ToHashSet();
+        var used = alreadyClaimed.ToHashSet();
         List<ConeFit> found = new();
 
-        for (int seed = 0; seed < regions.Regions.Count; seed++)
+        for (var seed = 0; seed < regions.Regions.Count; seed++)
         {
             if (used.Contains(seed) || !junctions.TryGetValue(seed, out Dictionary<int, Junction>? atSeed)) continue;
 
-            List<Junction> candidates = atSeed.Values.ToList();
-            bool accepted = false;
+            var candidates = atSeed.Values.ToList();
+            var accepted = false;
 
             // Two junctions of the seed propose an apex: the point where their
             // lines come closest. Every pair is tried, because a facet's other
             // junctions run along the base and say nothing about the apex.
-            for (int i = 0; i < candidates.Count && !accepted; i++)
+            for (var i = 0; i < candidates.Count && !accepted; i++)
             {
-                for (int j = i + 1; j < candidates.Count && !accepted; j++)
+                for (var j = i + 1; j < candidates.Count && !accepted; j++)
                 {
                     Vec3? apex = ClosestPointBetween(
                         candidates[i], candidates[j], options, topology.Mesh.BoundingBoxDiagonal());
@@ -397,7 +397,7 @@ public static class PrimitiveFitter
                     if (fit is null) continue;
 
                     found.Add(fit);
-                    foreach (int region in component) used.Add(region);
+                    foreach (var region in component) used.Add(region);
                     accepted = true;
                 }
             }
@@ -422,12 +422,12 @@ public static class PrimitiveFitter
         if (AreParallel(a.Direction, b.Direction, 1e-3)) return null;
 
         Vec3 between = b.Point - a.Point;
-        double dot = a.Direction.Dot(b.Direction);
-        double denominator = 1 - dot * dot;
+        var dot = a.Direction.Dot(b.Direction);
+        var denominator = 1 - dot * dot;
         if (Math.Abs(denominator) < 1e-12) return null;
 
-        double alongA = (between.Dot(a.Direction) - dot * between.Dot(b.Direction)) / denominator;
-        double alongB = (dot * between.Dot(a.Direction) - between.Dot(b.Direction)) / denominator;
+        var alongA = (between.Dot(a.Direction) - dot * between.Dot(b.Direction)) / denominator;
+        var alongB = (dot * between.Dot(a.Direction) - between.Dot(b.Direction)) / denominator;
 
         // Midpoint of the shortest connecting segment: with exact geometry the
         // lines meet and the two points coincide.
@@ -451,14 +451,14 @@ public static class PrimitiveFitter
         FittingOptions options,
         IndexedMesh mesh)
     {
-        double tolerance = options.RadiusTolerance * Math.Max(mesh.BoundingBoxDiagonal(), 1e-9);
+        var tolerance = options.RadiusTolerance * Math.Max(mesh.BoundingBoxDiagonal(), 1e-9);
         List<int> component = new();
         HashSet<int> visited = new() { seed };
         Queue<int> queue = new([seed]);
 
         while (queue.Count > 0)
         {
-            int region = queue.Dequeue();
+            var region = queue.Dequeue();
             component.Add(region);
 
             if (!junctions.TryGetValue(region, out Dictionary<int, Junction>? neighbours)) continue;
@@ -487,12 +487,12 @@ public static class PrimitiveFitter
         FittingOptions options,
         IndexedMesh mesh)
     {
-        double tolerance = options.RadiusTolerance * Math.Max(mesh.BoundingBoxDiagonal(), 1e-9);
-        HashSet<int> inComponent = component.ToHashSet();
+        var tolerance = options.RadiusTolerance * Math.Max(mesh.BoundingBoxDiagonal(), 1e-9);
+        var inComponent = component.ToHashSet();
 
-        foreach (int region in component)
+        foreach (var region in component)
         {
-            int neighbours = junctions[region].Values.Count(junction =>
+            var neighbours = junctions[region].Values.Count(junction =>
                 inComponent.Contains(junction.Other) && DistanceToLine(junction, apex) <= tolerance);
 
             if (neighbours != 2) return false;
@@ -515,16 +515,16 @@ public static class PrimitiveFitter
         Dictionary<int, Dictionary<int, Junction>> junctions,
         FittingOptions options)
     {
-        HashSet<int> inComponent = component.ToHashSet();
-        double sharpest = 0.0;
+        var inComponent = component.ToHashSet();
+        var sharpest = 0.0;
 
-        foreach (int region in component)
+        foreach (var region in component)
         {
             foreach (Junction junction in junctions[region].Values)
             {
                 if (inComponent.Contains(junction.Other)) continue;
 
-                double angle = regions.Regions[region].Normal.AngleTo(regions.Regions[junction.Other].Normal);
+                var angle = regions.Regions[region].Normal.AngleTo(regions.Regions[junction.Other].Normal);
                 sharpest = Math.Max(sharpest, angle * 180 / Math.PI);
             }
         }
@@ -555,7 +555,7 @@ public static class PrimitiveFitter
         foreach (Vec3 vertex in vertices)
         {
             Vec3 offset = vertex - apex.Value;
-            double along = offset.Dot(axis);
+            var along = offset.Dot(axis);
             heights.Add(along);
             radii.Add((offset - axis * along).Length);
         }
@@ -563,31 +563,31 @@ public static class PrimitiveFitter
         if (heights.Min() < -1e-9) return null; // the fan straddles the apex
 
         double numerator = 0, denominator = 0;
-        for (int i = 0; i < heights.Count; i++)
+        for (var i = 0; i < heights.Count; i++)
         {
             numerator += radii[i] * heights[i];
             denominator += heights[i] * heights[i];
         }
         if (denominator < 1e-18) return null;
 
-        double slope = numerator / denominator;
+        var slope = numerator / denominator;
         if (slope <= 1e-9) return null; // no taper: that is a cylinder, not a cone
 
-        double scale = Math.Max(mesh.BoundingBoxDiagonal(), 1e-9);
-        for (int i = 0; i < heights.Count; i++)
+        var scale = Math.Max(mesh.BoundingBoxDiagonal(), 1e-9);
+        for (var i = 0; i < heights.Count; i++)
             if (Math.Abs(radii[i] - slope * heights[i]) > options.RadiusTolerance * scale) return null;
 
         // The kernel builds a cone from its wider end, so that is where the base
         // point goes and the axis runs from there towards the apex.
-        double widest = heights.Max();
-        double narrowest = heights.Min();
-        double bottomRadius = slope * widest;
+        var widest = heights.Max();
+        var narrowest = heights.Min();
+        var bottomRadius = slope * widest;
 
         // A full cone's tip should come out at exactly zero, but the fitted apex
         // sits a hair off the one in the mesh, so it lands on something like
         // 1e-9 instead. That is not zero and it is not a radius either: the
         // kernel refuses to build a cone that thin. Snapping it closes the gap.
-        double topRadius = slope * narrowest;
+        var topRadius = slope * narrowest;
         if (topRadius < 1e-6 * bottomRadius) topRadius = 0;
 
         return new ConeFit(
@@ -609,12 +609,12 @@ public static class PrimitiveFitter
     private static Vec3? RefinedApex(
         List<int> component, Dictionary<int, Dictionary<int, Junction>> junctions)
     {
-        HashSet<int> inComponent = component.ToHashSet();
-        double[,] matrix = new double[3, 3];
-        double[] right = new double[3];
-        int lines = 0;
+        var inComponent = component.ToHashSet();
+        var matrix = new double[3, 3];
+        var right = new double[3];
+        var lines = 0;
 
-        foreach (int region in component)
+        foreach (var region in component)
         {
             foreach (Junction junction in junctions[region].Values)
             {
@@ -626,11 +626,11 @@ public static class PrimitiveFitter
                 double[] d = [junction.Direction.X, junction.Direction.Y, junction.Direction.Z];
                 double[] p = [junction.Point.X, junction.Point.Y, junction.Point.Z];
 
-                for (int row = 0; row < 3; row++)
+                for (var row = 0; row < 3; row++)
                 {
-                    for (int column = 0; column < 3; column++)
+                    for (var column = 0; column < 3; column++)
                     {
-                        double projection = (row == column ? 1 : 0) - d[row] * d[column];
+                        var projection = (row == column ? 1 : 0) - d[row] * d[column];
                         matrix[row, column] += projection;
                         right[row] += projection * p[column];
                     }
@@ -640,7 +640,7 @@ public static class PrimitiveFitter
 
         if (lines < 2) return null;
 
-        double[]? solution = Solve3(matrix, right);
+        var solution = Solve3(matrix, right);
         return solution is null ? null : new Vec3(solution[0], solution[1], solution[2]);
     }
 

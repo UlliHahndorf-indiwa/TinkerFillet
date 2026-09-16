@@ -41,10 +41,10 @@ public class WelderTests
         IndexedMesh mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
 
         Assert.Equal(soup.TriangleCount, mesh.TriangleCount);
-        for (int t = 0; t < soup.TriangleCount; t++)
+        for (var t = 0; t < soup.TriangleCount; t++)
         {
             ReadOnlySpan<double> original = soup.Triangle(t);
-            for (int corner = 0; corner < 3; corner++)
+            for (var corner = 0; corner < 3; corner++)
             {
                 Vec3 welded = mesh.CornerPosition(t, corner);
                 Assert.Equal(original[corner * 3], welded.X, 9);

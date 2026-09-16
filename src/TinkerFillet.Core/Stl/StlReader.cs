@@ -45,7 +45,7 @@ public static class StlReader
     private static bool DeclaredLengthMatches(ReadOnlySpan<byte> data)
     {
         if (data.Length < HeaderBytes + CountBytes) return false;
-        uint declared = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(HeaderBytes, CountBytes));
+        var declared = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(HeaderBytes, CountBytes));
         return HeaderBytes + CountBytes + (long)declared * TriangleBytes == data.Length;
     }
 
@@ -56,16 +56,16 @@ public static class StlReader
                 $"a binary STL needs at least {HeaderBytes + CountBytes} bytes for its header, " +
                 $"but the file has {data.Length}");
 
-        uint count = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(HeaderBytes, CountBytes));
-        long needed = HeaderBytes + CountBytes + (long)count * TriangleBytes;
+        var count = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(HeaderBytes, CountBytes));
+        var needed = HeaderBytes + CountBytes + (long)count * TriangleBytes;
         if (data.Length < needed)
             throw new StlFormatException(
                 $"the file declares {count} triangle(s), which needs {needed} bytes, " +
                 $"but only {data.Length} are present - the file looks truncated");
 
-        double[] positions = new double[count * 9];
-        int offset = HeaderBytes + CountBytes;
-        int target = 0;
+        var positions = new double[count * 9];
+        var offset = HeaderBytes + CountBytes;
+        var target = 0;
 
         for (uint triangle = 0; triangle < count; triangle++)
         {
@@ -73,7 +73,7 @@ public static class StlReader
             // leave it at zero or let it disagree with the vertex winding, so
             // it cannot be trusted; normals are derived from the geometry.
             ReadOnlySpan<byte> coordinates = data.Slice(offset + 12, 36);
-            for (int i = 0; i < 9; i++)
+            for (var i = 0; i < 9; i++)
                 positions[target++] = BinaryPrimitives.ReadSingleLittleEndian(coordinates.Slice(i * 4, 4));
 
             offset += TriangleBytes;
@@ -84,10 +84,10 @@ public static class StlReader
 
     private static TriangleSoup ReadAscii(ReadOnlySpan<byte> data)
     {
-        string text = Encoding.UTF8.GetString(data);
+        var text = Encoding.UTF8.GetString(data);
         List<double> positions = new();
-        int verticesInCurrentLoop = 0;
-        bool insideLoop = false;
+        var verticesInCurrentLoop = 0;
+        var insideLoop = false;
 
         foreach (ReadOnlySpan<char> rawLine in text.AsSpan().EnumerateLines())
         {
@@ -126,17 +126,17 @@ public static class StlReader
     private static void AppendVertex(ReadOnlySpan<char> rest, List<double> positions)
     {
         Span<Range> parts = stackalloc Range[4];
-        int found = rest.SplitAny(
+        var found = rest.SplitAny(
             parts, " \t", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         if (found != 3)
             throw new StlFormatException($"a vertex line has {found} coordinates instead of 3: '{rest}'");
 
-        for (int axis = 0; axis < 3; axis++)
+        for (var axis = 0; axis < 3; axis++)
         {
             // Invariant culture, always. On a German system the current culture
             // reads "1.5" as 15, which would silently scale the model.
-            if (!double.TryParse(rest[parts[axis]], NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
+            if (!double.TryParse(rest[parts[axis]], NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
                 throw new StlFormatException($"cannot read '{rest[parts[axis]]}' as a number");
 
             positions.Add(value);

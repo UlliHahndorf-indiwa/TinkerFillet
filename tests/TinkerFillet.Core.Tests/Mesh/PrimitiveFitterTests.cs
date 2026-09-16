@@ -110,7 +110,7 @@ public class PrimitiveFitterTests
         IReadOnlyList<CylinderFit> fits = Fit(soup);
 
         RegionSet regions = Regions(soup);
-        foreach (int index in fits[0].RegionIndices)
+        foreach (var index in fits[0].RegionIndices)
             Assert.True(regions.Regions[index].Normal.AngleTo(new Vec3(0, 0, 1)) > 1e-3);
     }
 
@@ -121,7 +121,7 @@ public class PrimitiveFitterTests
 
         HashSet<int> seen = new();
         foreach (CylinderFit fit in fits)
-            foreach (int index in fit.RegionIndices)
+            foreach (var index in fit.RegionIndices)
                 Assert.True(seen.Add(index), $"region {index} is in two cylinders");
     }
 
@@ -133,15 +133,15 @@ public class PrimitiveFitterTests
         RegionSet regions = RegionGrower.Grow(MeshTopology.Build(mesh), RegionOptions.ForModel(mesh));
         CylinderFit fit = PrimitiveFitter.FindCylinders(MeshTopology.Build(mesh), regions, FittingOptions.Default)[0];
 
-        foreach (int index in fit.RegionIndices)
+        foreach (var index in fit.RegionIndices)
         {
-            foreach (int triangle in regions.Regions[index].Triangles)
+            foreach (var triangle in regions.Regions[index].Triangles)
             {
-                for (int corner = 0; corner < 3; corner++)
+                for (var corner = 0; corner < 3; corner++)
                 {
                     Vec3 point = mesh.CornerPosition(triangle, corner) - fit.BasePoint;
-                    double alongAxis = point.Dot(fit.Axis);
-                    double distance = (point - fit.Axis * alongAxis).Length;
+                    var alongAxis = point.Dot(fit.Axis);
+                    var distance = (point - fit.Axis * alongAxis).Length;
                     Assert.Equal(fit.Radius, distance, 6);
                 }
             }
@@ -157,7 +157,7 @@ public class PrimitiveFitterTests
     private static IReadOnlyList<CylinderFit> Fit(TriangleSoup soup, FittingOptions? options = null)
     {
         IndexedMesh mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
-        MeshTopology topology = MeshTopology.Build(mesh);
+        var topology = MeshTopology.Build(mesh);
         RegionSet regions = RegionGrower.Grow(topology, RegionOptions.ForModel(mesh));
         return PrimitiveFitter.FindCylinders(topology, regions, options ?? FittingOptions.Default);
     }

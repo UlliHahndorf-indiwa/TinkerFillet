@@ -12,7 +12,7 @@ public class TriangleSoupTests
         double[] vertices = [0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0];
         int[] indices = [0, 1, 2, 1, 3, 2];
 
-        TriangleSoup soup = TriangleSoup.FromIndexed(vertices, indices);
+        var soup = TriangleSoup.FromIndexed(vertices, indices);
 
         Assert.Equal(2, soup.TriangleCount);
         Assert.Equal([0, 0, 0, 1, 0, 0, 0, 1, 0], soup.Triangle(0).ToArray());
@@ -29,7 +29,7 @@ public class TriangleSoupTests
     public void RoundTripThroughTheWriterSurvivesExpansion()
     {
         double[] vertices = [0, 0, 0, 2, 0, 0, 0, 3, 0];
-        TriangleSoup soup = TriangleSoup.FromIndexed(vertices, [0, 1, 2]);
+        var soup = TriangleSoup.FromIndexed(vertices, [0, 1, 2]);
 
         TriangleSoup reread = StlReader.Read(StlWriter.WriteBinary(soup));
 

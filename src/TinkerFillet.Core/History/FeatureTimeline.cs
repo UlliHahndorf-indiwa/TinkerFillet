@@ -34,7 +34,7 @@ public sealed class FeatureTimeline
     /// </summary>
     public void RecordOutcomes(IReadOnlyList<FilletFeature> replayed)
     {
-        Dictionary<Guid, FeatureStatus> byId = replayed.ToDictionary(feature => feature.Id, feature => feature.Status);
+        var byId = replayed.ToDictionary(feature => feature.Id, feature => feature.Status);
         _versions[_current] = _versions[_current]
             .Select(feature => byId.TryGetValue(feature.Id, out FeatureStatus status)
                 ? feature with { Status = status }
@@ -68,7 +68,7 @@ public sealed class FeatureTimeline
     private static ImmutableList<FilletFeature> Replace(
         ImmutableList<FilletFeature> list, Guid id, Func<FilletFeature, FilletFeature> change)
     {
-        int index = list.FindIndex(feature => feature.Id == id);
+        var index = list.FindIndex(feature => feature.Id == id);
         return index < 0 ? list : list.SetItem(index, change(list[index]));
     }
 }

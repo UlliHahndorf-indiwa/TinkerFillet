@@ -30,7 +30,7 @@ From `Indiwa\Nova\Docs\Naming.md`:
 ### Coding Standards
 
 - **Namespaces:** Always single line at top of file, file-scoped (no brackets around class)
-- **Variable declarations:** Use explicit types. The use of `var` is **not allowed** in Nova (note: differs from original CodeStyleGuide)
+- **Variable declarations:** We only need to declare variables explicit if the content is not obvious, the use of var is allowed and preferred otherwise.
 - **One class per file:** File name equals class name
 - **Folder structure:** Parent folders in projects represent the namespace
 - **Private fields:** Prefix with underscore (`_fieldName`)

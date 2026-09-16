@@ -28,10 +28,10 @@ public sealed class MeshTopology
         // deliberately ignored here so that two triangles wound the same way -
         // an inconsistency, not a pairing - are detected rather than matched.
         Dictionary<(int Low, int High), List<int>> groups = new(_opposite.Length);
-        for (int halfEdge = 0; halfEdge < _opposite.Length; halfEdge++)
+        for (var halfEdge = 0; halfEdge < _opposite.Length; halfEdge++)
         {
-            int from = From(halfEdge);
-            int to = To(halfEdge);
+            var from = From(halfEdge);
+            var to = To(halfEdge);
             (int, int) key = from < to ? (from, to) : (to, from);
 
             if (!groups.TryGetValue(key, out List<int>? group)) groups[key] = group = [];

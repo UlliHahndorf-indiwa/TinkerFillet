@@ -33,7 +33,7 @@ public class FilletSessionTests
         RecordingKernel kernel = new(graph);
         FilletSession session = new(kernel);
 
-        FilletFeature vanished = FilletFeature.Create(
+        var vanished = FilletFeature.Create(
             EdgeSelector.From(EdgeGraphFixtures.OpenRun(3)[1]), radius: 3);
         FilletFeature[] features = new[] { FeatureFor(kernel, 0, 1), vanished, FeatureFor(kernel, 6, 2) };
 
@@ -144,9 +144,9 @@ public class FilletSessionTests
 
         private static EdgeGraph Renumber(EdgeGraph graph, int shift)
         {
-            int count = graph.Edges.Count;
+            var count = graph.Edges.Count;
             List<EdgeInfo> reordered = new(count);
-            for (int i = 0; i < count; i++)
+            for (var i = 0; i < count; i++)
                 reordered.Add(graph.Edges[(i + shift) % count] with { Id = i });
             return graph with { Edges = reordered };
         }

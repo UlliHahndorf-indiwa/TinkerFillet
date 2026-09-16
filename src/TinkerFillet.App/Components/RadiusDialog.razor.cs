@@ -30,7 +30,7 @@ public partial class RadiusDialog
 
     private async Task Confirm()
     {
-        if (!double.TryParse(_radiusText, NumberStyles.Float, CultureInfo.InvariantCulture, out double radius)
+        if (!double.TryParse(_radiusText, NumberStyles.Float, CultureInfo.InvariantCulture, out var radius)
             || radius <= 0)
         {
             _error = "Bitte einen Radius größer als 0 eingeben.";

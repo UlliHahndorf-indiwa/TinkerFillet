@@ -23,7 +23,7 @@ public sealed class FilletSession(IKernelSession kernel, ChainOptions chainOptio
             // Resolved against the shape as it stands at this point in the
             // list, not against the original. Replay is deterministic, so an
             // untouched step finds exactly the edge the user picked.
-            int? seed = feature.Selector.Resolve(state.Graph, modelDiagonal);
+            var seed = feature.Selector.Resolve(state.Graph, modelDiagonal);
             if (seed is null)
             {
                 outcomes.Add(feature with { Status = FeatureStatus.Failed });

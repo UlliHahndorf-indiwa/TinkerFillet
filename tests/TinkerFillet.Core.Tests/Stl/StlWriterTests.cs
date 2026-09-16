@@ -22,7 +22,7 @@ public class StlWriterTests
     {
         TriangleSoup soup = StlReader.Read(StlFixtures.Binary([StlFixtures.SampleTriangle]));
 
-        byte[] bytes = StlWriter.WriteBinary(soup);
+        var bytes = StlWriter.WriteBinary(soup);
 
         // 80 byte header + 4 byte count + 50 bytes per triangle
         Assert.Equal(80 + 4 + 50, bytes.Length);
@@ -37,7 +37,7 @@ public class StlWriterTests
         double[] counterClockwise = [0, 0, 0, 1, 0, 0, 0, 1, 0];
         TriangleSoup soup = StlReader.Read(StlFixtures.Binary([counterClockwise]));
 
-        byte[] bytes = StlWriter.WriteBinary(soup);
+        var bytes = StlWriter.WriteBinary(soup);
 
         (double x, double y, double z) normal = ReadFacetNormal(bytes, 0);
         Assert.Equal(0.0, normal.x, 6);
@@ -61,7 +61,7 @@ public class StlWriterTests
 
     private static (double x, double y, double z) ReadFacetNormal(byte[] stl, int triangle)
     {
-        int offset = 84 + triangle * 50;
+        var offset = 84 + triangle * 50;
         return (
             BitConverter.ToSingle(stl, offset),
             BitConverter.ToSingle(stl, offset + 4),

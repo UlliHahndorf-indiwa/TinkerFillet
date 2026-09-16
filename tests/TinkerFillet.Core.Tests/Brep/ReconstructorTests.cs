@@ -26,7 +26,7 @@ public class ReconstructorTests
     {
         ReconstructionResult result = Reconstructor.Reconstruct(MeshFixtures.PlateWithSquareHole());
 
-        List<RecipeFace> withHoles = result.Recipe.Faces.Where(face => face.Holes.Count > 0).ToList();
+        var withHoles = result.Recipe.Faces.Where(face => face.Holes.Count > 0).ToList();
 
         Assert.Equal(2, withHoles.Count);
         Assert.All(withHoles, face => Assert.Equal(4, face.Holes[0].PointCount));
@@ -40,9 +40,9 @@ public class ReconstructorTests
 
         foreach (RecipeFace face in result.Recipe.Faces)
         {
-            for (int i = 0; i < face.Outer.Points.Length; i++)
+            for (var i = 0; i < face.Outer.Points.Length; i++)
             {
-                double value = face.Outer.Points[i];
+                var value = face.Outer.Points[i];
                 Assert.True(value is >= -1e-9 and <= size + 1e-9, $"coordinate {value} is outside the cube");
             }
         }
@@ -56,7 +56,7 @@ public class ReconstructorTests
 
         foreach (RecipeFace face in result.Recipe.Faces)
         {
-            for (int point = 0; point < face.Outer.PointCount; point++)
+            for (var point = 0; point < face.Outer.PointCount; point++)
             {
                 Vec3 corner = new(
                     face.Outer.Points[point * 3],
@@ -64,7 +64,7 @@ public class ReconstructorTests
                     face.Outer.Points[point * 3 + 2]);
 
                 // Every corner of a cube has all three coordinates at an extreme.
-                foreach (double axis in new[] { corner.X, corner.Y, corner.Z })
+                foreach (var axis in new[] { corner.X, corner.Y, corner.Z })
                     Assert.True(Math.Abs(axis) < 1e-9 || Math.Abs(axis - size) < 1e-9, $"{corner} is not a cube corner");
             }
         }
@@ -140,9 +140,9 @@ public class ReconstructorTests
         List<double> positions = new();
         const int bands = 12;
 
-        for (int band = 0; band < bands; band++)
+        for (var band = 0; band < bands; band++)
         {
-            for (int segment = 0; segment < bands; segment++)
+            for (var segment = 0; segment < bands; segment++)
             {
                 Vec3 a = OnSphere(band, segment);
                 Vec3 b = OnSphere(band + 1, segment);
@@ -157,8 +157,8 @@ public class ReconstructorTests
 
         static Vec3 OnSphere(int band, int segment)
         {
-            double phi = Math.PI * band / bands;
-            double theta = 2 * Math.PI * segment / bands;
+            var phi = Math.PI * band / bands;
+            var theta = 2 * Math.PI * segment / bands;
             return new Vec3(
                 Math.Sin(phi) * Math.Cos(theta),
                 Math.Sin(phi) * Math.Sin(theta),

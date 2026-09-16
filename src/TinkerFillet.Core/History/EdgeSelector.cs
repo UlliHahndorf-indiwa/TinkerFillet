@@ -50,14 +50,14 @@ public sealed record EdgeSelector(Vec3 Midpoint, Vec3 Tangent, Vec3 NormalA, Vec
     {
         if (graph.Edges.Count == 0) return null;
 
-        double scale = modelDiagonal > 1e-12 ? modelDiagonal : 1.0;
-        double best = double.MaxValue;
-        double runnerUp = double.MaxValue;
-        int bestId = -1;
+        var scale = modelDiagonal > 1e-12 ? modelDiagonal : 1.0;
+        var best = double.MaxValue;
+        var runnerUp = double.MaxValue;
+        var bestId = -1;
 
         foreach (EdgeInfo candidate in graph.Edges)
         {
-            double score = ScoreAgainst(candidate, scale);
+            var score = ScoreAgainst(candidate, scale);
             if (score < best)
             {
                 runnerUp = best;
@@ -82,13 +82,13 @@ public sealed record EdgeSelector(Vec3 Midpoint, Vec3 Tangent, Vec3 NormalA, Vec
     /// </summary>
     public double ScoreAgainst(EdgeInfo candidate, double scale)
     {
-        double position = (candidate.Midpoint - Midpoint).Length / scale;
+        var position = (candidate.Midpoint - Midpoint).Length / scale;
 
         // Direction only, not sense: which way along the edge the kernel chose
         // to parametrise is not something a user selected.
-        double direction = 1 - Math.Abs(Tangent.Dot(candidate.Tangent));
+        var direction = 1 - Math.Abs(Tangent.Dot(candidate.Tangent));
 
-        double length = Math.Abs(candidate.Length - Length) / scale;
+        var length = Math.Abs(candidate.Length - Length) / scale;
 
         return position
              + 0.5 * direction
@@ -105,8 +105,8 @@ public sealed record EdgeSelector(Vec3 Midpoint, Vec3 Tangent, Vec3 NormalA, Vec
         Vec3 a = candidate.NormalA ?? Vec3.Zero;
         Vec3 b = candidate.NormalB ?? Vec3.Zero;
 
-        double straight = 0.25 * (1 - Math.Abs(NormalA.Dot(a))) + 0.25 * (1 - Math.Abs(NormalB.Dot(b)));
-        double swapped = 0.25 * (1 - Math.Abs(NormalA.Dot(b))) + 0.25 * (1 - Math.Abs(NormalB.Dot(a)));
+        var straight = 0.25 * (1 - Math.Abs(NormalA.Dot(a))) + 0.25 * (1 - Math.Abs(NormalB.Dot(b)));
+        var swapped = 0.25 * (1 - Math.Abs(NormalA.Dot(b))) + 0.25 * (1 - Math.Abs(NormalB.Dot(a)));
 
         return Math.Min(straight, swapped);
     }

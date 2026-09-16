@@ -13,7 +13,7 @@ public class MeshTopologyTests
         Assert.True(topology.IsClosedManifold);
         Assert.Empty(topology.BoundaryHalfEdges);
         Assert.Empty(topology.NonManifoldHalfEdges);
-        for (int halfEdge = 0; halfEdge < topology.HalfEdgeCount; halfEdge++)
+        for (var halfEdge = 0; halfEdge < topology.HalfEdgeCount; halfEdge++)
             Assert.NotEqual(MeshTopology.NoOpposite, topology.Opposite[halfEdge]);
     }
 
@@ -22,9 +22,9 @@ public class MeshTopologyTests
     {
         MeshTopology topology = Build(MeshFixtures.Cube(subdivisions: 2));
 
-        for (int halfEdge = 0; halfEdge < topology.HalfEdgeCount; halfEdge++)
+        for (var halfEdge = 0; halfEdge < topology.HalfEdgeCount; halfEdge++)
         {
-            int opposite = topology.Opposite[halfEdge];
+            var opposite = topology.Opposite[halfEdge];
             Assert.Equal(halfEdge, topology.Opposite[opposite]);
         }
     }
@@ -73,7 +73,7 @@ public class MeshTopologyTests
     public void HalfEdgeEndpointsFollowTriangleWinding()
     {
         IndexedMesh mesh = Welder.Weld(MeshFixtures.SingleTriangle(), 1e-6);
-        MeshTopology topology = MeshTopology.Build(mesh);
+        var topology = MeshTopology.Build(mesh);
 
         // Half-edge c of triangle t runs from corner c to corner (c+1)%3.
         Assert.Equal(mesh.Corner(0, 0), topology.From(0));

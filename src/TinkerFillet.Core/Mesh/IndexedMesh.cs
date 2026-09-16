@@ -60,7 +60,7 @@ public sealed class IndexedMesh
 
         Vec3 min = Vertex(0);
         Vec3 max = min;
-        for (int i = 1; i < VertexCount; i++)
+        for (var i = 1; i < VertexCount; i++)
         {
             Vec3 v = Vertex(i);
             min = new Vec3(Math.Min(min.X, v.X), Math.Min(min.Y, v.Y), Math.Min(min.Z, v.Z));

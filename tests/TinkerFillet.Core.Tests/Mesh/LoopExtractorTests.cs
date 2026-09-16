@@ -26,7 +26,7 @@ public class LoopExtractorTests
     {
         IReadOnlyList<RegionLoops> loops = Extract(MeshFixtures.PlateWithSquareHole());
 
-        List<RegionLoops> withHoles = loops.Where(face => face.Holes.Count > 0).ToList();
+        var withHoles = loops.Where(face => face.Holes.Count > 0).ToList();
 
         Assert.Equal(2, withHoles.Count); // top and bottom
         foreach (RegionLoops face in withHoles)
@@ -64,7 +64,7 @@ public class LoopExtractorTests
         const int sides = 20;
         IReadOnlyList<RegionLoops> loops = Extract(MeshFixtures.Prism(sides));
 
-        List<RegionLoops> caps = loops.Where(face => face.Outer.Vertices.Count == sides).ToList();
+        var caps = loops.Where(face => face.Outer.Vertices.Count == sides).ToList();
 
         Assert.Equal(2, caps.Count);
     }
@@ -75,7 +75,7 @@ public class LoopExtractorTests
         const int sides = 12;
         IReadOnlyList<RegionLoops> loops = Extract(MeshFixtures.Prism(sides));
 
-        int quads = loops.Count(face => face.Holes.Count == 0 && face.Outer.Vertices.Count == 4);
+        var quads = loops.Count(face => face.Holes.Count == 0 && face.Outer.Vertices.Count == 4);
 
         Assert.Equal(sides, quads);
     }
@@ -99,7 +99,7 @@ public class LoopExtractorTests
     public void EveryRegionYieldsExactlyOneOuterLoop()
     {
         TriangleSoup soup = MeshFixtures.PlateWithSquareHole();
-        int regionCount = Regions(soup).Regions.Count;
+        var regionCount = Regions(soup).Regions.Count;
 
         IReadOnlyList<RegionLoops> loops = Extract(soup);
 
@@ -130,7 +130,7 @@ public class LoopExtractorTests
     private static IReadOnlyList<RegionLoops> Extract(TriangleSoup soup)
     {
         IndexedMesh mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
-        MeshTopology topology = MeshTopology.Build(mesh);
+        var topology = MeshTopology.Build(mesh);
         RegionSet regions = RegionGrower.Grow(topology, RegionOptions.ForModel(mesh));
         return LoopExtractor.Extract(topology, regions, LoopOptions.Default);
     }

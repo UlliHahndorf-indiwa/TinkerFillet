@@ -255,8 +255,9 @@ Layout der Dateien bestimmen:
 
 - **Kein `@code`-Block.** Jede Komponente ist `Name.razor` (nur Markup) plus
   `Name.razor.cs` (partielle Klasse) plus `Name.razor.css`.
-- **Kein `var`.** Explizite Typen überall; `new()` auf der rechten Seite, damit
-  der Typname nicht doppelt dasteht.
+- **`var`, wo der Typ schon auf der Zeile steht**, sonst ausgeschrieben:
+  `var faces = new List<RecipeFace>()` gegen
+  `IndexedMesh mesh = Welder.Weld(…)` — dort sagt nichts, was zurückkommt.
 - **Eine Klasse pro Datei**, Dateiname gleich Klassenname.
 - **CSS beim Bauteil**, nicht in `app.css`. Dort steht nur, was wirklich
   mehrere Komponenten teilen: die Farbvariablen, `.hint`, und die Blazor-

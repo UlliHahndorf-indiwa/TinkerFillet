@@ -83,7 +83,7 @@ public partial class Editor : IAsyncDisposable
         if (model.Cylinders.Count > 0) recovered.Add($"{model.Cylinders.Count} Zylinder");
         if (model.Cones.Count > 0) recovered.Add($"{model.Cones.Count} Kegel");
 
-        string rounded = recovered.Count == 0 ? "" : $", darunter {string.Join(" und ", recovered)}";
+        var rounded = recovered.Count == 0 ? "" : $", darunter {string.Join(" und ", recovered)}";
         return $"{model.Mesh.TriangleCount} Dreiecke zu {model.Recipe.Faces.Count} Flächen "
              + $"zusammengefasst{rounded}.";
     }
@@ -104,7 +104,7 @@ public partial class Editor : IAsyncDisposable
     private async Task OnMinimumFacetsChanged(ChangeEventArgs args)
     {
         if (_soup is null) return;
-        if (!int.TryParse(args.Value?.ToString(), out int facets)) return;
+        if (!int.TryParse(args.Value?.ToString(), out var facets)) return;
 
         _minimumFacets = facets;
         ClearChain();
@@ -198,7 +198,7 @@ public partial class Editor : IAsyncDisposable
             await OccBridge.ShowAsync(result.State.Handle);
 
             _notes.RemoveAll(note => note.Kind == "replay");
-            int failed = result.Failed.Count();
+            var failed = result.Failed.Count();
             if (failed > 0)
             {
                 AddNote("warn",
@@ -221,7 +221,7 @@ public partial class Editor : IAsyncDisposable
     {
         if (_model is null || _busy || _chain is not null) return;
 
-        int picked = OccBridge.Pick(args.OffsetX, args.OffsetY);
+        var picked = OccBridge.Pick(args.OffsetX, args.OffsetY);
         if (picked == _hovered) return;
 
         _hovered = picked;
@@ -232,7 +232,7 @@ public partial class Editor : IAsyncDisposable
     {
         if (_state is null || _busy) return;
 
-        int picked = OccBridge.Pick(args.OffsetX, args.OffsetY);
+        var picked = OccBridge.Pick(args.OffsetX, args.OffsetY);
         if (picked < 0) return;
 
         // The chain is shown before the radius is asked for, so the user sees
@@ -245,7 +245,7 @@ public partial class Editor : IAsyncDisposable
     {
         if (_state is null || _chain is null) return;
 
-        EdgeSelector selector = EdgeSelector.From(_state.Graph[_chain[0]]);
+        var selector = EdgeSelector.From(_state.Graph[_chain[0]]);
         ClearChain();
 
         _timeline.Add(FilletFeature.Create(selector, radius));
@@ -265,11 +265,11 @@ public partial class Editor : IAsyncDisposable
     {
         if (_kernel is null || _model is null || _state is null) return;
 
-        int? seed = feature.Selector.Resolve(_state.Graph, _model.Mesh.BoundingBoxDiagonal());
+        var seed = feature.Selector.Resolve(_state.Graph, _model.Mesh.BoundingBoxDiagonal());
         if (seed is null) return;
 
         IReadOnlyList<int> chain = ChainPropagator.Propagate(_state.Graph, seed.Value, Chain);
-        double largest = await BusyFor("Größtmöglicher Radius wird gesucht…",
+        var largest = await BusyFor("Größtmöglicher Radius wird gesucht…",
             () => _kernel.LargestRadiusAsync(_state.Handle, chain, feature.Radius));
 
         if (largest > 0.01)
@@ -307,7 +307,7 @@ public partial class Editor : IAsyncDisposable
     private Task OnFeatureAngleChanged(ChangeEventArgs args)
     {
         if (!double.TryParse(args.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture,
-                out double angle))
+                out var angle))
         {
             return Task.CompletedTask;
         }
@@ -324,7 +324,7 @@ public partial class Editor : IAsyncDisposable
 
         await Busy("STL wird geschrieben…", () =>
         {
-            TriangleSoup soup = TriangleSoup.FromIndexed(
+            var soup = TriangleSoup.FromIndexed(
                 OccBridge.ExportPositions(), OccBridge.ExportIndices());
             OccBridge.DownloadFile("tinkerfillet.stl", StlWriter.WriteBinary(soup));
             return Task.CompletedTask;
@@ -333,7 +333,7 @@ public partial class Editor : IAsyncDisposable
 
     private async Task OnKeyDown(KeyboardEventArgs args)
     {
-        bool modifier = args.CtrlKey || args.MetaKey;
+        var modifier = args.CtrlKey || args.MetaKey;
 
         if (args.Key == "Escape") ClearChain();
         else if (modifier && args.Key is "z" or "Z" && !args.ShiftKey) await OnUndo();

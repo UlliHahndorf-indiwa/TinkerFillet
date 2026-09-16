@@ -60,9 +60,9 @@ public static class MeshFixtures
         double[] xs = [0, (width - hole) / 2, (width + hole) / 2, width];
         double[] ys = [0, (depth - hole) / 2, (depth + hole) / 2, depth];
 
-        for (int i = 0; i < 3; i++)
+        for (var i = 0; i < 3; i++)
         {
-            for (int j = 0; j < 3; j++)
+            for (var j = 0; j < 3; j++)
             {
                 if (i == 1 && j == 1) continue; // the hole
 
@@ -76,7 +76,7 @@ public static class MeshFixtures
         }
 
         // Outer walls, split at the same grid lines as the faces they meet.
-        for (int i = 0; i < 3; i++)
+        for (var i = 0; i < 3; i++)
         {
             AppendQuad(triangles,
                 new Vec3(xs[i], 0, 0), new Vec3(xs[i + 1], 0, 0),
@@ -86,7 +86,7 @@ public static class MeshFixtures
                 new Vec3(xs[i], depth, thickness), new Vec3(xs[i + 1], depth, thickness)); // +Y
         }
 
-        for (int j = 0; j < 3; j++)
+        for (var j = 0; j < 3; j++)
         {
             AppendQuad(triangles,
                 new Vec3(width, ys[j], 0), new Vec3(width, ys[j + 1], 0),
@@ -126,17 +126,17 @@ public static class MeshFixtures
         if (sides < 3) throw new ArgumentOutOfRangeException(nameof(sides));
 
         List<double> triangles = new();
-        Vec3[] ring = new Vec3[sides];
-        for (int i = 0; i < sides; i++)
+        var ring = new Vec3[sides];
+        for (var i = 0; i < sides; i++)
         {
-            double angle = 2 * Math.PI * i / sides;
+            var angle = 2 * Math.PI * i / sides;
             ring[i] = new Vec3(radius * Math.Cos(angle), radius * Math.Sin(angle), 0);
         }
 
         Vec3 bottomCentre = new(0, 0, 0);
         Vec3 topCentre = new(0, 0, height);
 
-        for (int i = 0; i < sides; i++)
+        for (var i = 0; i < sides; i++)
         {
             Vec3 a = ring[i];
             Vec3 b = ring[(i + 1) % sides];
@@ -171,13 +171,13 @@ public static class MeshFixtures
 
         Vec3 On(double radius, int index, double z)
         {
-            double angle = 2 * Math.PI * index / sides;
+            var angle = 2 * Math.PI * index / sides;
             return new Vec3(radius * Math.Cos(angle), radius * Math.Sin(angle), z);
         }
 
-        for (int i = 0; i < sides; i++)
+        for (var i = 0; i < sides; i++)
         {
-            int next = (i + 1) % sides;
+            var next = (i + 1) % sides;
 
             // Top and bottom annulus.
             AppendQuad(triangles,
@@ -219,13 +219,13 @@ public static class MeshFixtures
 
         Vec3 On(double radius, int index, double z)
         {
-            double angle = 2 * Math.PI * index / sides;
+            var angle = 2 * Math.PI * index / sides;
             return new Vec3(radius * Math.Cos(angle), radius * Math.Sin(angle), z);
         }
 
-        for (int i = 0; i < sides; i++)
+        for (var i = 0; i < sides; i++)
         {
-            int next = (i + 1) % sides;
+            var next = (i + 1) % sides;
 
             if (topRadius <= 0)
             {
@@ -271,14 +271,14 @@ public static class MeshFixtures
 
     private static void AppendGrid(List<double> target, Vec3 origin, Vec3 u, Vec3 v, int subdivisions)
     {
-        for (int i = 0; i < subdivisions; i++)
+        for (var i = 0; i < subdivisions; i++)
         {
-            for (int j = 0; j < subdivisions; j++)
+            for (var j = 0; j < subdivisions; j++)
             {
-                double u0 = (double)i / subdivisions;
-                double u1 = (double)(i + 1) / subdivisions;
-                double v0 = (double)j / subdivisions;
-                double v1 = (double)(j + 1) / subdivisions;
+                var u0 = (double)i / subdivisions;
+                var u1 = (double)(i + 1) / subdivisions;
+                var v0 = (double)j / subdivisions;
+                var v1 = (double)(j + 1) / subdivisions;
 
                 AppendQuad(target,
                     origin + u * u0 + v * v0,

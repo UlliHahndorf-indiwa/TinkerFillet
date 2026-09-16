@@ -13,7 +13,7 @@ public static class LoopExtractor
     {
         List<RegionLoops> result = new(regions.Regions.Count);
 
-        for (int index = 0; index < regions.Regions.Count; index++)
+        for (var index = 0; index < regions.Regions.Count; index++)
             result.Add(ExtractRegion(topology, regions, index, options));
 
         return result;
@@ -29,13 +29,13 @@ public static class LoopExtractor
         // an open or non-manifold mesh shows up as an outline that will not
         // close.
         Dictionary<int, int> successor = new();
-        foreach (int triangle in region.Triangles)
+        foreach (var triangle in region.Triangles)
         {
-            for (int corner = 0; corner < 3; corner++)
+            for (var corner = 0; corner < 3; corner++)
             {
-                int halfEdge = triangle * 3 + corner;
-                int opposite = topology.Opposite[halfEdge];
-                int neighbourRegion = opposite == MeshTopology.NoOpposite
+                var halfEdge = triangle * 3 + corner;
+                var opposite = topology.Opposite[halfEdge];
+                var neighbourRegion = opposite == MeshTopology.NoOpposite
                     ? -1
                     : regions.RegionOfTriangle[opposite / 3];
 
@@ -47,16 +47,16 @@ public static class LoopExtractor
         List<Loop> loops = new();
         HashSet<int> visited = new();
 
-        foreach (int start in successor.Keys.Order())
+        foreach (var start in successor.Keys.Order())
         {
             if (!visited.Add(start)) continue;
 
             List<int> vertices = new();
-            int current = start;
+            var current = start;
             while (true)
             {
                 vertices.Add(current);
-                if (!successor.TryGetValue(current, out int halfEdge))
+                if (!successor.TryGetValue(current, out var halfEdge))
                     throw new InvalidOperationException(
                         $"the outline of region {regionIndex} does not close at vertex {current}");
 
@@ -78,8 +78,8 @@ public static class LoopExtractor
         // The outer boundary is the one enclosing the most area. Holes wind the
         // other way and therefore come out negative, so comparing the absolute
         // value is what identifies the outline.
-        int outerIndex = 0;
-        for (int i = 1; i < loops.Count; i++)
+        var outerIndex = 0;
+        for (var i = 1; i < loops.Count; i++)
             if (Math.Abs(loops[i].SignedArea) > Math.Abs(loops[outerIndex].SignedArea)) outerIndex = i;
 
         Loop outer = loops[outerIndex];
@@ -101,7 +101,7 @@ public static class LoopExtractor
         if (collinearAngle <= 0 || vertices.Count <= 3) return vertices;
 
         List<int> kept = new(vertices.Count);
-        for (int i = 0; i < vertices.Count; i++)
+        for (var i = 0; i < vertices.Count; i++)
         {
             Vec3 previous = mesh.Vertex(vertices[(i - 1 + vertices.Count) % vertices.Count]);
             Vec3 current = mesh.Vertex(vertices[i]);
@@ -130,7 +130,7 @@ public static class LoopExtractor
         Vec3 origin = mesh.Vertex(vertices[0]);
         Vec3 total = Vec3.Zero;
 
-        for (int i = 1; i < vertices.Count - 1; i++)
+        for (var i = 1; i < vertices.Count - 1; i++)
         {
             Vec3 a = mesh.Vertex(vertices[i]) - origin;
             Vec3 b = mesh.Vertex(vertices[i + 1]) - origin;

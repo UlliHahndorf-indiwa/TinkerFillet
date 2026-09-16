@@ -17,24 +17,24 @@ public static class StlFixtures
     /// </param>
     public static byte[] Binary(IEnumerable<double[]> triangles, string header = "binary stl")
     {
-        List<double[]> list = triangles.ToList();
+        var list = triangles.ToList();
         using MemoryStream stream = new();
         using BinaryWriter writer = new(stream);
 
-        byte[] headerBytes = new byte[80];
-        byte[] text = Encoding.ASCII.GetBytes(header);
+        var headerBytes = new byte[80];
+        var text = Encoding.ASCII.GetBytes(header);
         Array.Copy(text, headerBytes, Math.Min(text.Length, 80));
         writer.Write(headerBytes);
         writer.Write((uint)list.Count);
 
-        foreach (double[]? triangle in list)
+        foreach (var triangle in list)
         {
             // Facet normal. Deliberately written as zero: real files often do
             // this, and the reader must not depend on it.
             writer.Write(0f);
             writer.Write(0f);
             writer.Write(0f);
-            foreach (double coordinate in triangle) writer.Write((float)coordinate);
+            foreach (var coordinate in triangle) writer.Write((float)coordinate);
             writer.Write((ushort)0); // attribute byte count
         }
 
@@ -46,14 +46,14 @@ public static class StlFixtures
         StringBuilder builder = new();
         builder.Append("solid ").Append(name).Append('\n');
 
-        foreach (double[] triangle in triangles)
+        foreach (var triangle in triangles)
         {
             builder.Append("  facet normal 0 0 0\n");
             builder.Append("    outer loop\n");
-            for (int corner = 0; corner < 3; corner++)
+            for (var corner = 0; corner < 3; corner++)
             {
                 builder.Append("      vertex ");
-                for (int axis = 0; axis < 3; axis++)
+                for (var axis = 0; axis < 3; axis++)
                 {
                     builder.Append(
                         triangle[corner * 3 + axis].ToString("R", CultureInfo.InvariantCulture));

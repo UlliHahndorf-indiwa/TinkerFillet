@@ -35,7 +35,7 @@ public partial class FeatureList
     {
         // Invariant culture: the input element reports a dot even on a German
         // system, and parsing it with the current culture would read 1.5 as 15.
-        if (!double.TryParse(entered, NumberStyles.Float, CultureInfo.InvariantCulture, out double radius)
+        if (!double.TryParse(entered, NumberStyles.Float, CultureInfo.InvariantCulture, out var radius)
             || radius <= 0)
         {
             return Task.CompletedTask;

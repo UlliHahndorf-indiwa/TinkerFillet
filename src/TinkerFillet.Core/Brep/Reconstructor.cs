@@ -45,7 +45,7 @@ public static class Reconstructor
         IndexedMesh mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
 
         await Announce(ReconstructionStage.Topology);
-        MeshTopology topology = MeshTopology.Build(mesh);
+        var topology = MeshTopology.Build(mesh);
 
         await Announce(ReconstructionStage.Regions);
         RegionSet regions = RegionGrower.Grow(topology, RegionOptions.ForModel(mesh));
@@ -88,7 +88,7 @@ public static class Reconstructor
         double sewTolerance)
     {
         List<RecipeFace> faces = new(loops.Count);
-        HashSet<int> absorbed = cylinders.SelectMany(cylinder => cylinder.RegionIndices)
+        var absorbed = cylinders.SelectMany(cylinder => cylinder.RegionIndices)
             .Concat(cones.SelectMany(cone => cone.RegionIndices))
             .ToHashSet();
 
@@ -126,8 +126,8 @@ public static class Reconstructor
     private static RecipeLoop ToRecipeLoop(
         IndexedMesh mesh, Loop loop, IReadOnlyList<CylinderFit> cylinders, IReadOnlyList<ConeFit> cones)
     {
-        double[] points = new double[loop.Vertices.Count * 3];
-        for (int i = 0; i < loop.Vertices.Count; i++)
+        var points = new double[loop.Vertices.Count * 3];
+        for (var i = 0; i < loop.Vertices.Count; i++)
         {
             Vec3 vertex = mesh.Vertex(loop.Vertices[i]);
             points[i * 3] = vertex.X;
@@ -143,7 +143,7 @@ public static class Reconstructor
         IndexedMesh mesh, Loop loop, IReadOnlyList<CylinderFit> cylinders, IReadOnlyList<ConeFit> cones)
     {
         if (loop.Vertices.Count < 3) return null;
-        List<Vec3> vertices = loop.Vertices.Select(mesh.Vertex).ToList();
+        var vertices = loop.Vertices.Select(mesh.Vertex).ToList();
 
         foreach (CylinderFit cylinder in cylinders)
         {
@@ -156,7 +156,7 @@ public static class Reconstructor
         {
             // A cone's radius varies along its axis, so the test is against the
             // radius due at that height rather than against one number.
-            double slope = (cone.BottomRadius - cone.TopRadius) / cone.Height;
+            var slope = (cone.BottomRadius - cone.TopRadius) / cone.Height;
             RecipeLoop? found = RimOn(
                 vertices, cone.BasePoint, cone.Axis,
                 height => cone.BottomRadius - slope * height,
@@ -174,14 +174,14 @@ public static class Reconstructor
     private static RecipeLoop? RimOn(
         List<Vec3> vertices, Vec3 basePoint, Vec3 axis, Func<double, double> radiusAt, double scale)
     {
-        double tolerance = 1e-6 * Math.Max(scale, 1);
+        var tolerance = 1e-6 * Math.Max(scale, 1);
         List<double> heights = new(vertices.Count);
 
         foreach (Vec3 vertex in vertices)
         {
             Vec3 offset = vertex - basePoint;
-            double height = offset.Dot(axis);
-            double radial = (offset - axis * height).Length;
+            var height = offset.Dot(axis);
+            var radial = (offset - axis * height).Length;
 
             if (Math.Abs(radial - radiusAt(height)) > tolerance) return null;
             heights.Add(height);
@@ -199,7 +199,7 @@ public static class Reconstructor
     private static Vec3 WindingNormal(List<Vec3> vertices)
     {
         Vec3 normal = Vec3.Zero;
-        for (int i = 0; i < vertices.Count; i++)
+        for (var i = 0; i < vertices.Count; i++)
         {
             Vec3 current = vertices[i];
             Vec3 next = vertices[(i + 1) % vertices.Count];

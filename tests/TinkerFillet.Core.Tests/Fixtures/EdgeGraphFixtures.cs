@@ -22,16 +22,16 @@ public static class EdgeGraphFixtures
     public static EdgeGraph Ring(int segments, double radius = 5, double dihedralDegrees = 90)
     {
         List<Vec3> positions = new();
-        for (int i = 0; i < segments; i++)
+        for (var i = 0; i < segments; i++)
         {
-            double angle = 2 * Math.PI * i / segments;
+            var angle = 2 * Math.PI * i / segments;
             positions.Add(new Vec3(radius * Math.Cos(angle), radius * Math.Sin(angle), 0));
         }
 
         List<EdgeInfo> edges = new();
-        for (int i = 0; i < segments; i++)
+        for (var i = 0; i < segments; i++)
         {
-            int next = (i + 1) % segments;
+            var next = (i + 1) % segments;
             edges.Add(StraightEdge(i, positions[i], positions[next], [i, next], dihedralDegrees, [0, i + 1]));
         }
 
@@ -45,10 +45,10 @@ public static class EdgeGraphFixtures
     public static EdgeGraph OpenRun(int segments, double dihedralDegrees = 90)
     {
         List<Vec3> positions = new();
-        for (int i = 0; i <= segments; i++) positions.Add(new Vec3(i, 0, 0));
+        for (var i = 0; i <= segments; i++) positions.Add(new Vec3(i, 0, 0));
 
         List<EdgeInfo> edges = new();
-        for (int i = 0; i < segments; i++)
+        for (var i = 0; i < segments; i++)
             edges.Add(StraightEdge(i, positions[i], positions[i + 1], [i, i + 1], dihedralDegrees, [0, 1]));
 
         return new EdgeGraph { Edges = edges, VertexPositions = positions, FaceCount = 2 };
@@ -78,7 +78,7 @@ public static class EdgeGraphFixtures
     /// </summary>
     public static EdgeGraph Corner(double turnDegrees, double dihedralDegrees = 90)
     {
-        double turn = turnDegrees * Math.PI / 180;
+        var turn = turnDegrees * Math.PI / 180;
         List<Vec3> positions =
         [
             new(-1, 0, 0),

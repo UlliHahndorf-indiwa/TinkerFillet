@@ -37,7 +37,7 @@ public class RegionGrowerTests
         HashSet<int> seen = new();
         foreach (PlanarRegion region in regions.Regions)
         {
-            foreach (int triangle in region.Triangles)
+            foreach (var triangle in region.Triangles)
                 Assert.True(seen.Add(triangle), $"triangle {triangle} is in two regions");
         }
         Assert.Equal(soup.TriangleCount, seen.Count);
@@ -48,9 +48,9 @@ public class RegionGrowerTests
     {
         RegionSet regions = Grow(MeshFixtures.Cube(subdivisions: 3));
 
-        for (int index = 0; index < regions.Regions.Count; index++)
+        for (var index = 0; index < regions.Regions.Count; index++)
         {
-            foreach (int triangle in regions.Regions[index].Triangles)
+            foreach (var triangle in regions.Regions[index].Triangles)
                 Assert.Equal(index, regions.RegionOfTriangle[triangle]);
         }
     }
@@ -83,7 +83,7 @@ public class RegionGrowerTests
         {
             // Plane offsets of an axis-aligned cube from the origin are 0 or
             // +/- size, depending on which way the normal points.
-            double offset = Math.Abs(region.Offset);
+            var offset = Math.Abs(region.Offset);
             Assert.True(offset < 1e-9 || Math.Abs(offset - size) < 1e-9, $"unexpected plane offset {region.Offset}");
         }
     }
@@ -146,7 +146,7 @@ public class RegionGrowerTests
         // and bottom of a thin plate into one face.
         RegionSet regions = Grow(MeshFixtures.PlateWithSquareHole(thickness: 0.5));
 
-        List<PlanarRegion> topOrBottom = regions.Regions
+        var topOrBottom = regions.Regions
             .Where(region => Math.Abs(Math.Abs(region.Normal.Z) - 1) < 1e-9)
             .ToList();
 
