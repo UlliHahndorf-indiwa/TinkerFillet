@@ -17,6 +17,14 @@ public static class Reconstructor
     private const double NotCadLikeRatio = 0.3;
 
     /// <summary>
+    /// Below this many faces the ratio says nothing. A plain box is six
+    /// faces from twelve triangles - half - and there is nothing organic
+    /// about it; the ratio only means something once there are enough faces
+    /// for merging to have had a chance.
+    /// </summary>
+    private const int NotCadLikeFloor = 50;
+
+    /// <summary>
     /// Runs the pipeline without reporting anything, which is what every test
     /// and every caller that is not a user interface wants.
     ///
@@ -63,6 +71,8 @@ public static class Reconstructor
             topology, regions, options, [.. cylinders.SelectMany(cylinder => cylinder.RegionIndices)]);
 
         await Announce(ReconstructionStage.Recipe);
+        cylinders = [.. cylinders.Where(cylinder => RimsMatch(mesh, loops, cylinder))];
+        cones = [.. cones.Where(cone => RimsMatch(mesh, loops, cone))];
         BrepRecipe recipe = BuildRecipe(mesh, regions, loops, cylinders, cones, SewTolerance(mesh));
 
         return new ReconstructionResult
@@ -117,6 +127,58 @@ public static class Reconstructor
         }
 
         return new BrepRecipe(faces, sewTolerance);
+    }
+
+    /// <summary>
+    /// Whether every rim of a recovered cylinder is also a boundary of some
+    /// face beside it - which is what decides whether the two will meet.
+    ///
+    /// A recovered surface is exact. The faces around it keep the outlines the
+    /// mesh gave them unless those outlines are recognised as lying on it, and
+    /// a recognised one is replaced by the same exact circle. Where that
+    /// recognition fails, the exact wall stands next to a polygon that is only
+    /// close to it, sewing leaves both free, and the result is not a solid.
+    ///
+    /// So the fit is only worth using if its rims were found. It is not enough
+    /// for the fit itself to be good: on one model a cone came out 0.05 mm away
+    /// from the rim it was fitted to - well inside what the fitter accepts,
+    /// seven thousand times what meeting a neighbour needs - and quietly turned
+    /// the whole model into loose faces.
+    /// </summary>
+    private static bool RimsMatch(IndexedMesh mesh, IReadOnlyList<RegionLoops> loops, CylinderFit cylinder) =>
+        CountRims(mesh, loops, vertices => RimOn(
+            vertices, cylinder.BasePoint, cylinder.Axis, _ => cylinder.Radius, cylinder.Radius)) >= 2;
+
+    /// <summary>
+    /// The same for a cone. A full one has a single rim, because its other end
+    /// is the apex and no face meets it there.
+    /// </summary>
+    private static bool RimsMatch(IndexedMesh mesh, IReadOnlyList<RegionLoops> loops, ConeFit cone)
+    {
+        var slope = (cone.BottomRadius - cone.TopRadius) / cone.Height;
+        var needed = cone.TopRadius > 0 ? 2 : 1;
+
+        return CountRims(mesh, loops, vertices => RimOn(
+            vertices, cone.BasePoint, cone.Axis,
+            height => cone.BottomRadius - slope * height,
+            Math.Max(cone.BottomRadius, cone.TopRadius))) >= needed;
+    }
+
+    private static int CountRims(
+        IndexedMesh mesh, IReadOnlyList<RegionLoops> loops, Func<List<Vec3>, RecipeLoop?> on)
+    {
+        var found = 0;
+
+        foreach (RegionLoops face in loops)
+        {
+            foreach (Loop loop in face.Holes.Prepend(face.Outer))
+            {
+                if (loop.Vertices.Count < 3) continue;
+                if (on([.. loop.Vertices.Select(mesh.Vertex)]) is not null) found++;
+            }
+        }
+
+        return found;
     }
 
     /// <summary>
@@ -274,7 +336,8 @@ public static class Reconstructor
         // Counted after the cylinders and cones have been recovered, not
         // before. A tessellated cone starts out as one region per facet and
         // would otherwise be reported as organic when it is nothing of the kind.
-        if (mesh.TriangleCount > 0 && recipe.Faces.Count > NotCadLikeRatio * mesh.TriangleCount)
+        if (recipe.Faces.Count > NotCadLikeFloor
+            && recipe.Faces.Count > NotCadLikeRatio * mesh.TriangleCount)
         {
             findings.Add(new Diagnostic(
                 DiagnosticKind.NotCadLike,

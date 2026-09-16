@@ -58,7 +58,21 @@ export function buildSolid(kernel, recipe) {
     return built;
   });
 
-  return kernel.buildSolidFromFaces(faces, recipe.sewTolerance);
+  const built = kernel.buildSolidFromFaces(faces, recipe.sewTolerance);
+
+  // Sewing does not refuse. Hand it faces that do not meet and it returns a
+  // compound of the pieces, which looks like a shape, draws like a shape and
+  // can be clicked on - and no fillet will ever build on it. A model that comes
+  // apart has to say so here rather than fail later as something else.
+  if (!kernel.isSolid(built)) {
+    const error = new Error(
+      `the ${recipe.faces.length} faces did not close into a solid - they sewed into a ` +
+      `${kernel.getShapeType(built)} instead`);
+    error.code = "NOT_A_SOLID";
+    throw error;
+  }
+
+  return built;
 }
 
 /**

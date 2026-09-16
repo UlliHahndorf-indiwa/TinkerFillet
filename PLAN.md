@@ -792,6 +792,69 @@ Kanten. Die App meldet sie, der Körper entsteht trotzdem.
 
 ---
 
+## Drei weitere echte Exporte — und was sie aufdeckten ✅
+
+| Datei | Dreiecke | Größe | Ergebnis |
+|---|---|---|---|
+| `Epic Migelo (1).stl` | 28 | 66 × 38 × 22 | Körper, 11 Flächen, 24 Kanten, **0 freie** |
+| `Epic Migelo.stl` | 1054 | 34 × 33 × 34 | Körper, 258 Flächen, 640 Kanten, **0 freie** |
+| `Orca Klotür.stl` | 1108 | 54,5 × 12,5 × 14 | Körper, 280 Flächen, 828 Kanten, **0 freie** |
+
+Alle drei geschlossen, keine nicht-mannigfaltigen Kanten, Rekonstruktion unter
+250 ms. Zwei davon kamen aber erst nach zwei Korrekturen so heraus.
+
+### Ein schlecht sitzendes Primitiv zerlegte das Modell
+
+`Epic Migelo.stl` ergab **keinen Körper**, sondern ein Compound aus losen
+Flächen — 131 Kanten ohne Partner. Ursache war ein einzelner erkannter Kegel:
+
+| | |
+|---|---|
+| Abstand des Randes von der gefitteten Kegelfläche | **4,7e-2 mm** |
+| Toleranz, innerhalb derer ein Rand als Kreis erkannt wird | 6,8e-6 mm |
+| Kreis-Schleifen in der Beschreibung | **1** — nur die des Kegels selbst |
+
+Der Fitter akzeptierte den Kegel (sein eigenes Residuum lag in der Toleranz),
+aber **keine Nachbarfläche erkannte ihren Rand darauf**. Die exakte Kegelwand
+stand damit neben Polygonzügen, die nur ungefähr dort liegen. Ohne Kegel
+entstand sofort ein sauberer Körper aus 258 Flächen.
+
+Neue Regel: **ein erkannter Zylinder oder Kegel wird nur verwendet, wenn seine
+Ränder auch gefunden wurden.** Ein Zylinder braucht zwei, ein voller Kegel
+einen, ein Kegelstumpf zwei. Sonst zählt er nicht und seine Facetten bleiben
+die Ebenen, die sie sind. Das ist genau das Risiko, das für Stufe 2.3 notiert
+war — nur dass „die Schleifen liegen exakt auf der Trägerfläche" eben auch
+geprüft werden muss und nicht bloß gehofft.
+
+Wirkung: `Epic Migelo.stl` 131 freie Kanten → **0**, `Orca Klotür.stl` 326 → **0**.
+
+### Vernähen scheitert nicht, es liefert Bruchstücke
+
+`buildSolidFromFaces` verweigert nichts. Bekommt es Flächen, die sich nicht
+treffen, gibt es ein Compound zurück — das aussieht wie eine Form, sich zeichnen
+und anklicken lässt, und auf dem **nie ein Fillet baut**. `buildSolid` prüft
+jetzt `isSolid` und wirft sonst `NOT_A_SOLID`. Ein Modell, das auseinanderfällt,
+muss das dort sagen, wo es passiert.
+
+### Falscher Alarm bei kleinen Modellen
+
+`Epic Migelo (1).stl`: 28 Dreiecke, 11 Flächen — und die Warnung „sieht nach
+einem gescannten Modell aus". Die Kennzahl ist der Anteil Flächen an Dreiecken,
+Schwelle 30 %. **Ein nackter Quader liegt bei 50 %.** Die Zahl sagt erst etwas,
+wenn es überhaupt genug Flächen gibt, dass Zusammenfassen eine Chance hatte;
+Untergrenze jetzt 50 Flächen.
+
+### Beobachtung ohne Fehler
+
+`Epic Migelo.stl` ist ein Low-Poly-Modell: 258 exakt ebene Facetten, 256 konvexe
+und 128 konkave scharfe Kanten. Eine Verrundung einer einzelnen Kante trägt
+OpenCASCADE dort über die Facettierung weiter und **vergrößert** das Volumen,
+weil sie über konkave Kanten mitläuft. Das ist Verhalten des Kernels, kein
+Fehler der App — aber Verrundungen auf Low-Poly-Modellen tun nicht unbedingt
+das, was man erwartet.
+
+---
+
 ## Stufe 2 — Umsetzung
 
 Ohne diesen Schritt besteht ein Tinkercad-Lochrand aus N Einzelkanten; der

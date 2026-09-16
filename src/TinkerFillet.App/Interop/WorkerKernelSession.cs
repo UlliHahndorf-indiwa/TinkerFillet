@@ -95,6 +95,9 @@ internal sealed class WorkerKernelSession : IKernelSession
     /// <summary>The same, for the step that turns the recipe into a solid.</summary>
     public static string ReadableBuildFailure(string message) => message switch
     {
+        var text when text.Contains("did not close into a solid", StringComparison.Ordinal) =>
+            "Die Flächen ließen sich nicht zu einem Körper vernähen - sie treffen sich nicht überall. "
+            + "Das Modell lässt sich anzeigen, aber nicht verrunden.",
         var text when text.Contains("CONSTRUCTION_FAILED", StringComparison.Ordinal) =>
             "Aus diesem Modell ließ sich kein Körper bilden. Die Flächen, die aus den Dreiecken "
             + "gewonnen wurden, ergeben keine geschlossene Hülle - das passiert bei gerundeten oder "
