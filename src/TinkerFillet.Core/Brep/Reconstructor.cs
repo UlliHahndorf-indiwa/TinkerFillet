@@ -22,6 +22,25 @@ public sealed class ReconstructionResult
 }
 
 /// <summary>
+/// The steps of the pipeline, in the order they run.
+///
+/// They exist so the caller can say what is happening. Reconstructing a plate
+/// with tens of thousands of triangles takes long enough that silence reads as
+/// a hang, and one step is not a fixed fraction of the others - which of them
+/// dominates depends on the model.
+/// </summary>
+public enum ReconstructionStage
+{
+    Welding,
+    Topology,
+    Regions,
+    Loops,
+    Cylinders,
+    Cones,
+    Recipe,
+}
+
+/// <summary>
 /// Runs the whole mesh-side pipeline: weld, topology, regions, loops, cylinder
 /// recovery, recipe.
 /// </summary>
@@ -33,17 +52,52 @@ public static class Reconstructor
     /// </summary>
     private const double NotCadLikeRatio = 0.3;
 
-    public static ReconstructionResult Reconstruct(TriangleSoup soup, FittingOptions? fitting = null)
+    /// <summary>
+    /// Runs the pipeline without reporting anything, which is what every test
+    /// and every caller that is not a user interface wants.
+    ///
+    /// Nothing suspends when there is no one to report to, so waiting on the
+    /// task here completes on the spot rather than blocking.
+    /// </summary>
+    public static ReconstructionResult Reconstruct(TriangleSoup soup, FittingOptions? fitting = null) =>
+        ReconstructAsync(soup, fitting, null).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Runs the pipeline, telling <paramref name="onStage"/> before each step.
+    ///
+    /// The hook returns a task so the caller can do more than record the name:
+    /// on WebAssembly everything here runs on the one thread the browser draws
+    /// with, so a caller that wants its progress panel to appear has to be
+    /// given the chance to hand the browser a turn.
+    /// </summary>
+    public static async Task<ReconstructionResult> ReconstructAsync(
+        TriangleSoup soup,
+        FittingOptions? fitting,
+        Func<ReconstructionStage, Task>? onStage)
     {
+        Task Announce(ReconstructionStage stage) => onStage?.Invoke(stage) ?? Task.CompletedTask;
+
+        await Announce(ReconstructionStage.Welding);
         var mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
+
+        await Announce(ReconstructionStage.Topology);
         var topology = MeshTopology.Build(mesh);
+
+        await Announce(ReconstructionStage.Regions);
         var regions = RegionGrower.Grow(topology, RegionOptions.ForModel(mesh));
+
+        await Announce(ReconstructionStage.Loops);
         var loops = LoopExtractor.Extract(topology, regions, LoopOptions.Default);
+
+        await Announce(ReconstructionStage.Cylinders);
         var options = fitting ?? FittingOptions.Default;
         var cylinders = PrimitiveFitter.FindCylinders(topology, regions, options);
+
+        await Announce(ReconstructionStage.Cones);
         var cones = PrimitiveFitter.FindCones(
             topology, regions, options, [.. cylinders.SelectMany(cylinder => cylinder.RegionIndices)]);
 
+        await Announce(ReconstructionStage.Recipe);
         var recipe = BuildRecipe(mesh, loops, cylinders, cones, SewTolerance(mesh));
 
         return new ReconstructionResult

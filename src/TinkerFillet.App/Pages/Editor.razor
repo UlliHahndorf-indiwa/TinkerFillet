@@ -36,23 +36,20 @@
         </label>
 
         <button @onclick="Export" disabled="@(_model is null || _busy)">STL exportieren</button>
-
-        @if (_busy)
-        {
-            <span class="busy">@_busyMessage</span>
-        }
     </header>
 
     <div class="stage">
         <canvas id="viewport" @onmousemove="OnMouseMove" @onclick="OnClick"></canvas>
 
-        @if (_model is null)
+        @if (_model is null && !_busy)
         {
             <div class="empty">
                 <p>STL-Datei laden, Kante anklicken, Radius eingeben.</p>
                 <p class="hint">Die Datei bleibt im Browser und wird nirgendwohin übertragen.</p>
             </div>
         }
+
+        <ProgressPanel Visible="_busy" Message="@_busyMessage" Step="_busyStep" Steps="_busySteps" />
     </div>
 
     <aside class="side">
@@ -95,7 +92,15 @@
     private int _minimumFacets = FittingOptions.Default.MinimumFacets;
     private bool _busy;
     private string _busyMessage = "";
+    private int _busyStep;
+    private int _busySteps;
     private int _hovered = -1;
+
+    /// <summary>
+    /// Reading the file, the seven steps of the reconstruction, building the
+    /// solid, and drawing it.
+    /// </summary>
+    private const int LoadingSteps = 10;
 
     private ChainOptions Chain => new(_featureAngle, ChainOptions.Default.KinkAngleDegrees);
 
@@ -159,12 +164,12 @@
         using var buffer = new MemoryStream();
         await stream.CopyToAsync(buffer);
 
-        await Busy("Modell wird analysiert…", async () =>
+        await Busy("Datei wird gelesen…", LoadingSteps, async () =>
         {
             try
             {
                 _soup = StlReader.Read(buffer.ToArray());
-                _model = Reconstructor.Reconstruct(_soup, Fitting);
+                _model = await Reconstructor.ReconstructAsync(_soup, Fitting, Announce);
             }
             catch (StlFormatException error)
             {
@@ -179,10 +184,25 @@
 
             AddNote("info", Summary(_model));
 
+            await Step("Körper wird gebaut…", 9);
             await Rebuild();
+
+            await Step("Wird dargestellt…", 10);
             OccBridge.FrameModel();
         });
     }
+
+    private Task Announce(ReconstructionStage stage) => Step(stage switch
+    {
+        ReconstructionStage.Welding => "Punkte werden verschweißt…",
+        ReconstructionStage.Topology => "Nachbarschaften werden bestimmt…",
+        ReconstructionStage.Regions => "Ebene Flächen werden gesucht…",
+        ReconstructionStage.Loops => "Ränder werden verkettet…",
+        ReconstructionStage.Cylinders => "Zylinder werden erkannt…",
+        ReconstructionStage.Cones => "Kegel werden erkannt…",
+        ReconstructionStage.Recipe => "Flächenbeschreibung wird gebaut…",
+        _ => "Modell wird analysiert…",
+    }, (int)stage + 2);
 
     /// <summary>
     /// Replays the whole feature list. There is no incremental path on purpose:
@@ -345,21 +365,40 @@
         OccBridge.SetHighlight("[]");
     }
 
-    private async Task Busy(string message, Func<Task> work)
+    private Task Busy(string message, Func<Task> work) => Busy(message, 0, work);
+
+    private async Task Busy(string message, int steps, Func<Task> work)
     {
         _busy = true;
-        _busyMessage = message;
-        StateHasChanged();
-        await Task.Yield();
+        _busySteps = steps;
         try
         {
+            await Step(message, steps > 0 ? 1 : 0);
             await work();
         }
         finally
         {
             _busy = false;
+            _busySteps = 0;
             StateHasChanged();
         }
+    }
+
+    /// <summary>
+    /// Names the step now starting and lets the browser draw it.
+    ///
+    /// The delay is the point of this method. WebAssembly runs on the same
+    /// thread the browser paints with, and Task.Yield only reaches the end of
+    /// the current microtask queue, which is still before any painting. A
+    /// timer goes back through the event loop, so the panel is actually on
+    /// screen before the next step starts occupying the thread.
+    /// </summary>
+    private async Task Step(string message, int step)
+    {
+        _busyMessage = message;
+        _busyStep = step;
+        StateHasChanged();
+        await Task.Delay(1);
     }
 
     /// <summary>

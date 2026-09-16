@@ -204,16 +204,32 @@ export function edgeGraph(kernel, solid) {
     return { x: box.xmin, y: box.ymin, z: box.zmin };
   });
 
+  // Which faces carry each edge, and which way each of them travels along it.
+  //
+  // The travel direction is what decides convex against concave further down.
+  // Two outward normals alone cannot: a convex and a concave right angle put
+  // exactly the same ninety degrees between them, and only the side each face
+  // extends to tells them apart.
+  //
+  // A face is listed once even where it meets the same edge twice. The seam of
+  // a full cylinder is such an edge - it belongs to that one face on both
+  // sides. That is a consequence of the parametrisation, not a feature of the
+  // surface, and it is left with no adjacent pair so it reads as one.
   const facesOfEdge = edgeShapes.map(() => []);
+  const senseInFace = new Map();
   faceShapes.forEach((face, faceIndex) => {
-    for (const hash of kernel.subShapeHashes(face, "edge", HASH_UPPER_BOUND)) {
-      const edgeIndex = indexByHash.get(hash);
-      if (edgeIndex !== undefined) facesOfEdge[edgeIndex].push(faceIndex);
+    for (const carried of kernel.getSubShapes(face, "edge")) {
+      const edgeIndex = indexByHash.get(kernel.hashCode(carried, HASH_UPPER_BOUND));
+      if (edgeIndex === undefined || facesOfEdge[edgeIndex].includes(faceIndex)) continue;
+
+      facesOfEdge[edgeIndex].push(faceIndex);
+      senseInFace.set(
+        `${faceIndex}:${edgeIndex}`,
+        kernel.shapeOrientation(carried) === "reversed" ? -1 : 1);
     }
   });
 
-  const scale = boundingBoxDiagonal(kernel, solid);
-  const normalAt = faceShapes.map((face) => outwardNormalFunction(kernel, solid, face, scale));
+  const normalAt = faceShapes.map((face) => outwardNormalFunction(kernel, face));
   const polylines = edgePolylines(kernel, solid, indexByHash, GRAPH_DEFLECTION);
 
   const edges = edgeShapes.map((edgeShape, index) => {
@@ -257,6 +273,29 @@ export function edgeGraph(kernel, solid) {
     const normalA = normalAt[adjacent[0]](midpoint);
     const normalB = normalAt[adjacent[1]](midpoint);
 
+    // The way the first face's boundary runs along this edge. The curve has a
+    // direction of its own; whether the face walks with it or against it is
+    // what the stored orientation says.
+    //
+    // The face's own orientation does not enter: it is already accounted for
+    // in the normal, and a wire is oriented against the face as it sits in the
+    // shell rather than against its bare surface.
+    const along = scaleVector(
+      alongCurve(kernel, edgeShape, tangent), senseInFace.get(`${adjacent[0]}:${index}`));
+
+    // Cross the outward normal with that direction and you get the way the
+    // first face extends away from the edge. Where the second face leans back
+    // under it - a negative component along its own outward normal - the two
+    // enclose material and the edge is convex. Where it leans out, the
+    // material wraps the long way round and the edge is concave.
+    //
+    // The normals alone cannot say: a convex and a concave right angle put the
+    // same ninety degrees between them. An earlier version therefore probed a
+    // ring of points around the edge and asked the kernel which were inside.
+    // That was correct and unusably slow - sixteen point-in-solid tests per
+    // edge, over nine minutes for a plate with sixty-four holes.
+    const into = cross(normalA, along);
+
     return {
       ...base,
       normalA,
@@ -264,7 +303,7 @@ export function edgeGraph(kernel, solid) {
       // Angle between the outward normals: zero where the surface continues
       // smoothly, ninety at a cube edge. This is what "sharp" means here.
       dihedralDegrees: (angleBetween(normalA, normalB) * 180) / Math.PI,
-      convex: isConvexAt(kernel, solid, midpoint, tangent, scale),
+      convex: dot(into, normalB) < 0,
     };
   });
 
@@ -272,122 +311,57 @@ export function edgeGraph(kernel, solid) {
 }
 
 /**
- * Convex or concave, decided by how much material surrounds the edge.
+ * The edge's own direction of travel, sampled at the point the normals are
+ * taken at rather than anywhere else.
  *
- * The angle between the outward normals cannot tell the two apart: a convex and
- * a concave right angle both measure ninety degrees. What differs is the solid
- * angle the material occupies - a quarter turn around a convex edge, three
- * quarters around a concave one - so that is what gets measured, by probing a
- * ring of points around the edge and asking the kernel which are inside.
- *
- * An earlier version compared the direction towards each neighbouring face's
- * centre of mass. That is wrong for any face whose centroid is not on it: the
- * centre of an annulus sits in the middle of its own hole, so every bore rim
- * came out concave when all of them are convex.
+ * The tangent read off the polyline is at the right place but carries no
+ * meaning of its own: the polyline could have been walked either way. The
+ * curve's parametrisation is what a face's boundary orientation is expressed
+ * against, so the polyline tangent is turned to agree with it. Comparing at
+ * the parametric middle is enough - only the sign is wanted, and no edge this
+ * kernel produces turns by ninety degrees between its parametric and its
+ * arc-length middle.
  */
-function isConvexAt(kernel, solid, midpoint, tangent, scale) {
-  const probes = 16;
-  const reach = scale * 1e-4;
-
-  const helper = Math.abs(tangent.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
-  const u = normalize(cross(tangent, helper));
-  const v = cross(tangent, u);
-
-  let inside = 0;
-  for (let i = 0; i < probes; i++) {
-    // Offset half a step so no probe lands exactly on a face, where the
-    // classification is a coin toss.
-    const angle = (2 * Math.PI * (i + 0.5)) / probes;
-    const point = {
-      x: midpoint.x + (u.x * Math.cos(angle) + v.x * Math.sin(angle)) * reach,
-      y: midpoint.y + (u.y * Math.cos(angle) + v.y * Math.sin(angle)) * reach,
-      z: midpoint.z + (u.z * Math.cos(angle) + v.z * Math.sin(angle)) * reach,
-    };
-    if (kernel.containsPoint(solid, point)) inside++;
-  }
-
-  return inside * 2 < probes;
+function alongCurve(kernel, edgeShape, tangent) {
+  const { first, last } = kernel.curveParameters(edgeShape);
+  const natural = kernel.curveTangent(edgeShape, (first + last) / 2);
+  return dot(natural, tangent) < 0 ? scaleVector(tangent, -1) : tangent;
 }
 
 /**
  * Returns a function giving the face's outward normal at a given point.
  *
- * Two problems are settled here. First, the kernel's surface normal follows the
- * surface's own parametrisation, which may run either way relative to the
- * material; probing just off the surface and asking whether that point is
- * inside decides the sign without relying on stored orientation flags. Second,
- * a curved face has no single normal, so the caller has to say where.
+ * surfaceNormal already accounts for how the face sits in the shell: the bore
+ * of a washer is stored reversed, and its normal comes back pointing at the
+ * axis, which is outward for that solid. Sewing followed by ShapeFix_Solid is
+ * what makes that trustworthy.
  *
- * A plane needs neither a search nor a second thought, and in stage 1 every
- * face is one, so the expensive path stays unused until stage 2 introduces
- * cylinders.
+ * An earlier version did not trust it, and instead probed just off the surface
+ * and asked the kernel whether that point was inside. It got the same answer
+ * every time, at about twelve milliseconds a face on a solid of two hundred -
+ * and this model has a face for every hole.
+ *
+ * What is left is that a curved face has no single normal, so the caller has
+ * to say where. A plane needs no search, and in stage 1 every face is one, so
+ * the expensive path stays unused until stage 2 introduces cylinders.
  */
-function outwardNormalFunction(kernel, solid, face, scale) {
-  const bounds = kernel.uvBounds(face);
-  const { u, v } = interiorParameters(kernel, face, bounds);
-
-  const reference = normalize(kernel.surfaceNormal(face, u, v));
-  const point = kernel.pointOnSurface(face, u, v);
-  const probe = {
-    x: point.x + reference.x * scale * 1e-4,
-    y: point.y + reference.y * scale * 1e-4,
-    z: point.z + reference.z * scale * 1e-4,
-  };
-  const sign = kernel.containsPoint(solid, probe) ? -1 : 1;
-
+function outwardNormalFunction(kernel, face) {
   if (kernel.surfaceType(face) === "plane") {
-    const constant = scaleVector(reference, sign);
+    const { u, v } = interiorParameters(kernel, face, kernel.uvBounds(face));
+    const constant = normalize(kernel.surfaceNormal(face, u, v));
     return () => constant;
   }
 
+  // The kernel projects the point onto the surface in one step. An earlier
+  // version searched the parameter range for it instead - a coarse scan and
+  // eight rounds of halving, a hundred and thirteen surface evaluations for
+  // every normal asked for. On a plate with a hundred bores that was fifty
+  // seconds of the minute the whole graph took.
   return (target) => {
-    const found = closestParameters(kernel, face, bounds, target);
-    return scaleVector(normalize(kernel.surfaceNormal(face, found.u, found.v)), sign);
+    const found = kernel.uvFromPoint(face, target);
+    return normalize(kernel.surfaceNormal(face, found.u, found.v));
   };
 }
-
-/**
- * Parameters of the point on the face nearest the target.
- *
- * The kernel offers no inverse of pointOnSurface, so this is a coarse scan
- * followed by a few rounds of shrinking local search. That converges quickly on
- * the surfaces this project produces - cylinders and cones - and is only ever
- * needed for those.
- */
-function closestParameters(kernel, face, bounds, target) {
-  const uSpan = bounds.uMax - bounds.uMin;
-  const vSpan = bounds.vMax - bounds.vMin;
-
-  let best = { u: bounds.uMin + uSpan / 2, v: bounds.vMin + vSpan / 2, distance: Infinity };
-  const steps = 6;
-
-  for (let i = 0; i <= steps; i++) {
-    for (let j = 0; j <= steps; j++) {
-      const u = bounds.uMin + (uSpan * i) / steps;
-      const v = bounds.vMin + (vSpan * j) / steps;
-      const candidate = distance(kernel.pointOnSurface(face, u, v), target);
-      if (candidate < best.distance) best = { u, v, distance: candidate };
-    }
-  }
-
-  let uStep = uSpan / steps;
-  let vStep = vSpan / steps;
-  for (let round = 0; round < 8; round++) {
-    uStep /= 2;
-    vStep /= 2;
-
-    for (const [du, dv] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [-1, 1], [1, -1]]) {
-      const u = clamp(best.u + du * uStep, bounds.uMin, bounds.uMax);
-      const v = clamp(best.v + dv * vStep, bounds.vMin, bounds.vMax);
-      const candidate = distance(kernel.pointOnSurface(face, u, v), target);
-      if (candidate < best.distance) best = { u, v, distance: candidate };
-    }
-  }
-
-  return best;
-}
-
-const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 
 /**
  * A parameter pair that actually lies on the face. The middle of the uv range
@@ -579,11 +553,6 @@ function wireframeEdgeIds(kernel, solid, wire) {
     ids[group] = indexByHash.get(hash) ?? -1;
   }
   return ids;
-}
-
-function boundingBoxDiagonal(kernel, shape) {
-  const box = kernel.getBoundingBox(shape);
-  return Math.hypot(box.xmax - box.xmin, box.ymax - box.ymin, box.zmax - box.zmin);
 }
 
 const subtract = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });

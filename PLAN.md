@@ -522,7 +522,7 @@ ist eine echte Kreiskante, die der Kernel nur an der Flächennaht teilt.
 Verrundung am Außenrand der Scheibe: entfernt 59,557 gegen Pappus-Vorhersage
 59,661.
 
-Tests: 146 xUnit + 39 node, alle grün.
+Tests: 146 xUnit + 42 node, alle grün.
 
 ### Vier Fehler, die diese Stufe aufgedeckt hat
 
@@ -549,6 +549,77 @@ Tests: 146 xUnit + 39 node, alle grün.
 - Kugeln und Tori werden nicht erkannt.
 - Ein Sechskantprisma und ein grob tessellierter Zylinder sind in der Datei
   nicht unterscheidbar. Der Schwellwert steht als Regler in der Toolbar.
+
+---
+
+## Nachtrag zu Stufe 2 — Laufzeit und Fortschrittsanzeige ✅
+
+Gemeldetes Symptom: „Ich starte die App und lade ein STL-File. Aber nichts
+passiert."
+
+Es lag nicht an der Anzeige. Alle Testmodelle bis hierher hatten zwischen 6 und
+50 Flächen, und in dieser Größe ist jedes Verfahren schnell genug.
+
+### Ursache
+
+`edgeGraph` entschied konvex/konkav, indem es einen Ring aus 16 Punkten um jede
+Kante legte und den Kernel fragte, welche davon im Körper liegen. Ein
+Punkt-im-Körper-Test kostet auf einem Körper mit 228 Flächen **11,8 ms**. Bei
+1844 Kanten sind das 29.504 Tests — gemessen **587 Sekunden** für ein Modell,
+das der Nutzer als „lädt nicht" erlebt. Alles übrige in `edgeGraph` zusammen:
+55 ms.
+
+Zweiter Fund an derselben Stelle: die Normale einer gekrümmten Fläche wurde
+durch Absuchen des Parameterbereichs bestimmt — grobes Raster plus acht
+Halbierungsrunden, **113 Flächenauswertungen pro Normale**. Auf einer Platte
+mit 100 Bohrungen waren das 50 der 60 Sekunden, die danach noch übrig waren.
+
+### Behebung
+
+Konvexität wird jetzt lokal gerechnet statt erfragt: Die Richtung, in die sich
+die erste Fläche von der Kante weg erstreckt, ist `Normale × Laufrichtung` —
+und ob die zweite Fläche darunter zurückweicht oder darüber hinaussteht, sagt
+das Vorzeichen gegen deren Normale. Die Normalen allein können es nicht sagen;
+ein konvexer und ein konkaver rechter Winkel messen beide 90°.
+
+Dazu: `uvFromPoint` statt Parametersuche, und `shapeOrientation` statt eines
+Punkt-im-Körper-Tests pro Fläche (der ohnehin jedes Mal dasselbe antwortete —
+`surfaceNormal` berücksichtigt die Orientierung bereits).
+
+| Messung | vorher | nachher |
+|---|---|---|
+| `edgeGraph`, Platte mit 64 Bohrungen (332 Kanten) | 31.136 ms | **326 ms** |
+| `edgeGraph`, Körper mit 1344 Flächen (14.584 Kanten) | > 13 min, nie beendet | **1,2 s** |
+| Scheibe mit 32.768 Dreiecken, komplett, Release | — | **1,05 s** |
+| dieselbe im Debug-Dev-Server | — | **4,2 s** |
+
+`tests/occ/scale.test.mjs` hält das fest: eine Platte mit 64 Bohrungen muss in
+unter 5 Sekunden beschrieben sein, und keine ihrer Kanten darf konkav heißen.
+
+### Fortschrittsanzeige
+
+Eine Anzeige allein hätte das Problem nicht behoben, aber sie fehlte
+tatsächlich. WebAssembly läuft auf demselben Thread, mit dem der Browser malt —
+`Task.Yield` kommt nur bis ans Ende der Microtask-Queue, also **vor** jedes
+Zeichnen. Deshalb meldet `Reconstructor.ReconstructAsync` jeden Schritt über
+einen Haken, der ein `Task` zurückgibt, und die Oberfläche wartet dazwischen
+einen Timer ab. Erst dadurch erscheint die Anzeige überhaupt.
+
+Zehn Schritte: Datei lesen, die sieben der Rekonstruktion, Körper bauen,
+darstellen. Kein Prozentbalken über die Gesamtdauer — welcher Schritt dominiert,
+hängt vom Modell ab, ein gleichmäßig laufender Balken wäre erfunden. Der Spinner
+dreht per `transform`, damit er auch dann weiterläuft, wenn ein Schritt den
+Thread sekundenlang besetzt.
+
+### Nebenbefund
+
+Das Testmodell, mit dem das Problem zuerst reproduziert wurde — eine Platte mit
+einem Raster runder Löcher — war **selbst kaputt**: 88 offene und 25.600
+nicht-mannigfaltige Kanten, weil die Fächer-Triangulierung zwischen Lochrand und
+Zellrand nicht aufgeht. Die App hat das korrekt gemeldet. Die Laufzeitzahlen
+dieses Modells sind deshalb Zahlen für ein defektes Netz und stehen oben nur
+dort, wo sie als solche gekennzeichnet sind. Das Maßstabsmodell ist jetzt eine
+fein tessellierte Scheibe (`washer-fine.stl`, 32.768 Dreiecke, 4 Flächen).
 
 ---
 
@@ -675,6 +746,12 @@ plausibel aussehendes Ergebnis entsteht.
 Dazu: `BrepRecipe` mit bekannter Geometrie hinein, `EdgeGraph` heraus, und
 prüfen, dass Kantenanzahl und Dihedralwinkel stimmen.
 
+`scale.test.mjs` misst zusätzlich die Laufzeit, weil jeder andere Test hier auf
+so wenigen Flächen läuft, dass jedes Verfahren schnell genug wirkt. Eine Platte
+mit 64 Bohrungen muss in unter 5 Sekunden beschrieben sein — weit über dem, was
+die Arbeit kostet, und weit unter dem, was ein Punkt-im-Körper-Test pro Kante
+kostet, damit die Grenze eindeutig und nicht knapp ist.
+
 ### Ebene 3 — Durchstich
 Playwright: Anwendung starten, STL laden, Kante klicken, Radius eingeben,
 exportieren, die exportierte Datei parsen und ihr Volumen prüfen.
@@ -699,9 +776,18 @@ abgesetzter Kante, nach Stufe 2 eine Platte mit Durchgangsloch.
    Randschleifen erkannter Zylinder müssen exakt auf der Trägerfläche liegen,
    sonst scheitert das Vernähen. *Mitigation:* Stufe 1 liefert bereits ein
    nutzbares Werkzeug, Stufe 2 ist davon sauber getrennt.
-4. **Laufzeit bei großen Modellen.** Richtwert 100k Dreiecke: Mesh-Analyse
-   < 2 s, B-Rep-Aufbau < 3 s, Fillet < 2 s. Deutliche Verfehlung → Regionen-
-   bildung auf `Span<T>`/Arrays statt Objektlisten umstellen.
+4. **Laufzeit bei großen Modellen.** ⚠️ **eingetreten und behoben** — siehe
+   „Nachtrag zu Stufe 2". Die Ursache war nicht die Mesh-Analyse, auf die
+   dieser Punkt zielte, sondern der Kantengraph: ein Punkt-im-Körper-Test pro
+   Kante. Stand jetzt: 32.768 Dreiecke in 1,05 s (Release) bzw. 4,2 s
+   (Debug-Dev-Server), für ein Modell, das zu vier Flächen zusammenfällt.
+
+   Offen bleibt der Fall, in dem die Rekonstruktion *viele* Flächen zurückgibt.
+   Dort dominiert `PrimitiveFitter.FindCones`: es probiert je Region jedes Paar
+   ihrer Junctions und lässt von jedem aus einen Flutfüller laufen. Gemessen
+   7,6 s bei 7.644 Regionen — allerdings an einem defekten Netz, das nie hätte
+   so weit kommen sollen. Vor einer Optimierung ist zu klären, ob ein echtes
+   Tinkercad-Modell diesen Fall überhaupt erreicht.
 5. **Prisma/Zylinder-Mehrdeutigkeit (2.1)** ist prinzipiell nicht auflösbar.
 6. **Downloadgröße**: OCC-WASM 22,2 MB unkomprimiert dominiert, .NET-Runtime
    kommt mit ~2–3 MB komprimiert obendrauf. Durch Service Worker nur einmalig.

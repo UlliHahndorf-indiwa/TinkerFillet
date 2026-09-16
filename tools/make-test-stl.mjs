@@ -145,6 +145,12 @@ function washer(sides = 24, outerRadius = 20, holeRadius = 8, thickness = 6) {
 
 writeBinaryStl(join(out, "washer.stl"), washer());
 
+// The same washer at four thousand sides: thirty-two thousand triangles that
+// still describe four faces. Everything else here is small enough that any
+// speed is fast enough, and small models are exactly what hid a reconstruction
+// that took minutes.
+writeBinaryStl(join(out, "washer-fine.stl"), washer(4096, 40, 16, 6));
+
 /** Tessellated cone and truncated cone: fans whose side edges converge. */
 function coneShape(sides = 24, bottomRadius = 12, topRadius = 0, height = 18) {
   const on = (r, i, z) => {
