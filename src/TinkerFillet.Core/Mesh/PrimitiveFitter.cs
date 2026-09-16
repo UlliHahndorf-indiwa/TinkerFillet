@@ -18,6 +18,7 @@ public static class PrimitiveFitter
         Dictionary<int, Dictionary<int, Junction>> junctions = FindJunctions(topology, regions);
         HashSet<int> used = new();
         List<CylinderFit> found = new();
+        Scratch scratch = new();
 
         for (var seed = 0; seed < regions.Regions.Count; seed++)
         {
@@ -28,7 +29,13 @@ public static class PrimitiveFitter
             // ends - so each is tried rather than guessed at.
             foreach (Junction proposal in atSeed.Values)
             {
-                List<int> component = Grow(seed, proposal.Direction, junctions, used, options);
+                // The neighbour has to carry the ring on before it is worth
+                // walking the mesh for one. In a ring of three strips or more,
+                // the strip across a shared edge has a second edge parallel to
+                // the same axis - the one leading to the strip beyond it.
+                if (!CarriesTheRingOn(proposal.Other, seed, proposal.Direction, junctions, options)) continue;
+
+                List<int> component = Grow(seed, proposal.Direction, junctions, used, options, scratch);
                 if (component.Count < options.MinimumFacets) continue;
                 if (!IsClosedRing(component, proposal.Direction, junctions, options)) continue;
 
@@ -95,17 +102,54 @@ public static class PrimitiveFitter
         }
     }
 
-    /// <summary>Regions reachable from the seed across junctions parallel to the axis.</summary>
+    /// <summary>
+    /// Whether <paramref name="region"/> could be the next strip of a ring
+    /// along <paramref name="axis"/>, judged without walking anywhere.
+    ///
+    /// The edge it shares with the one we came from is already parallel to the
+    /// axis - that is where the axis came from - so it proves nothing. What has
+    /// to be there is a second one.
+    /// </summary>
+    private static bool CarriesTheRingOn(
+        int region,
+        int from,
+        Vec3 axis,
+        Dictionary<int, Dictionary<int, Junction>> junctions,
+        FittingOptions options)
+    {
+        if (!junctions.TryGetValue(region, out Dictionary<int, Junction>? neighbours)) return false;
+
+        foreach (Junction junction in neighbours.Values)
+        {
+            if (junction.Other == from) continue;
+            if (AreParallel(junction.Direction, axis, options.AxisAngleTolerance)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Regions reachable from the seed across junctions parallel to the axis.
+    /// The buffers belong to the caller and hold only until the next search -
+    /// see <see cref="Scratch"/>.
+    /// </summary>
     private static List<int> Grow(
         int seed,
         Vec3 axis,
         Dictionary<int, Dictionary<int, Junction>> junctions,
         HashSet<int> used,
-        FittingOptions options)
+        FittingOptions options,
+        Scratch scratch)
     {
-        List<int> component = new();
-        HashSet<int> visited = new() { seed };
-        Queue<int> queue = new([seed]);
+        List<int> component = scratch.Component;
+        HashSet<int> visited = scratch.Visited;
+        Queue<int> queue = scratch.Queue;
+
+        component.Clear();
+        visited.Clear();
+        queue.Clear();
+        visited.Add(seed);
+        queue.Enqueue(seed);
 
         while (queue.Count > 0)
         {
@@ -190,7 +234,8 @@ public static class PrimitiveFitter
         var lowest = along.Min();
 
         return new CylinderFit(
-            component,
+            // Copied: the caller hands in a buffer it reuses for the next search.
+            [.. component],
             BasePoint: centre + axis * lowest,
             Axis: axis,
             Radius: radius,
@@ -369,6 +414,10 @@ public static class PrimitiveFitter
         var used = alreadyClaimed.ToHashSet();
         List<ConeFit> found = new();
 
+        var scale = topology.Mesh.BoundingBoxDiagonal();
+        var tolerance = options.RadiusTolerance * Math.Max(scale, 1e-9);
+        Scratch scratch = new();
+
         for (var seed = 0; seed < regions.Regions.Count; seed++)
         {
             if (used.Contains(seed) || !junctions.TryGetValue(seed, out Dictionary<int, Junction>? atSeed)) continue;
@@ -383,11 +432,24 @@ public static class PrimitiveFitter
             {
                 for (var j = i + 1; j < candidates.Count && !accepted; j++)
                 {
-                    Vec3? apex = ClosestPointBetween(
-                        candidates[i], candidates[j], options, topology.Mesh.BoundingBoxDiagonal());
+                    Vec3? apex = ClosestPointBetween(candidates[i], candidates[j], options, scale);
                     if (apex is null) continue;
 
-                    List<int> component = GrowTowards(seed, apex.Value, junctions, used, options, topology.Mesh);
+                    // Both neighbours have to carry the fan on before it is
+                    // worth walking the mesh for one. In a fan of three facets
+                    // or more, the facet across a fan junction has a second
+                    // junction through the same apex - the one leading to the
+                    // facet beyond it.
+                    //
+                    // Without this the search is quadratic in a way that only
+                    // shows on rounded models: any two edges of a planar region
+                    // meet somewhere, so a region with a dozen neighbours
+                    // proposes seventy-odd apexes and walks the mesh for each.
+                    // A connector of 5545 triangles came to 192,000 walks.
+                    if (!CarriesTheFanOn(candidates[i].Other, seed, apex.Value, junctions, tolerance)) continue;
+                    if (!CarriesTheFanOn(candidates[j].Other, seed, apex.Value, junctions, tolerance)) continue;
+
+                    List<int> component = GrowTowards(seed, apex.Value, junctions, used, options, topology.Mesh, scratch);
                     if (component.Count < options.MinimumFacets) continue;
                     if (!IsClosedFan(component, apex.Value, junctions, options, topology.Mesh)) continue;
 
@@ -442,19 +504,62 @@ public static class PrimitiveFitter
         return (offset - junction.Direction * offset.Dot(junction.Direction)).Length;
     }
 
+    /// <summary>
+    /// Whether <paramref name="region"/> could be the next facet of a fan
+    /// around <paramref name="apex"/>, judged without walking anywhere.
+    ///
+    /// The junction it shares with the one we came from already points at the
+    /// apex - that is how the apex was found - so it proves nothing. What has
+    /// to be there is a second one.
+    /// </summary>
+    private static bool CarriesTheFanOn(
+        int region,
+        int from,
+        Vec3 apex,
+        Dictionary<int, Dictionary<int, Junction>> junctions,
+        double tolerance)
+    {
+        if (!junctions.TryGetValue(region, out Dictionary<int, Junction>? neighbours)) return false;
+
+        foreach (Junction junction in neighbours.Values)
+        {
+            if (junction.Other == from) continue;
+            if (DistanceToLine(junction, apex) <= tolerance) return true;
+        }
+
+        return false;
+    }
+
     /// <summary>Regions reachable across junctions whose lines pass through the apex.</summary>
+    /// <summary>
+    /// Regions reachable across junctions whose lines pass through the apex.
+    ///
+    /// The three collections are handed in rather than made here. A rounded
+    /// model asks this question tens of thousands of times and most answers are
+    /// two or three regions long, so allocating a list, a set and a queue per
+    /// call is most of the work - and on WebAssembly, where collecting them
+    /// again is dearer than on the desktop, it showed up as runs that varied by
+    /// a factor of two.
+    /// </summary>
     private static List<int> GrowTowards(
         int seed,
         Vec3 apex,
         Dictionary<int, Dictionary<int, Junction>> junctions,
         HashSet<int> used,
         FittingOptions options,
-        IndexedMesh mesh)
+        IndexedMesh mesh,
+        Scratch scratch)
     {
         var tolerance = options.RadiusTolerance * Math.Max(mesh.BoundingBoxDiagonal(), 1e-9);
-        List<int> component = new();
-        HashSet<int> visited = new() { seed };
-        Queue<int> queue = new([seed]);
+        List<int> component = scratch.Component;
+        HashSet<int> visited = scratch.Visited;
+        Queue<int> queue = scratch.Queue;
+
+        component.Clear();
+        visited.Clear();
+        queue.Clear();
+        visited.Add(seed);
+        queue.Enqueue(seed);
 
         while (queue.Count > 0)
         {
@@ -591,7 +696,8 @@ public static class PrimitiveFitter
         if (topRadius < 1e-6 * bottomRadius) topRadius = 0;
 
         return new ConeFit(
-            component,
+            // Copied: the caller hands in a buffer it reuses for the next search.
+            [.. component],
             BasePoint: apex.Value + axis * widest,
             Axis: -axis,
             BottomRadius: bottomRadius,
@@ -647,4 +753,17 @@ public static class PrimitiveFitter
     /// <param name="Point">A point on the shared edge. With the direction it makes a line,
     /// which is what cone recovery intersects to find the apex.</param>
     private readonly record struct Junction(int Other, Vec3 Direction, Vec3 Point);
+
+    /// <summary>
+    /// Working room for one search, reused across all of them. Only ever held
+    /// by the loop that owns it, and only ever valid until the next search.
+    /// </summary>
+    private sealed class Scratch
+    {
+        public List<int> Component { get; } = [];
+
+        public HashSet<int> Visited { get; } = [];
+
+        public Queue<int> Queue { get; } = new();
+    }
 }

@@ -9,6 +9,15 @@ namespace TinkerFillet.Core.Mesh;
 /// </summary>
 public sealed class IndexedMesh
 {
+    /// <summary>
+    /// Computed once, because the answer cannot change and the question is
+    /// asked constantly: every tolerance in the project is a fraction of the
+    /// diagonal, so the fitters ask for it inside their innermost loops. Each
+    /// answer costs a pass over every vertex, which is invisible on a cube and
+    /// is most of the runtime on a model with thousands of small regions.
+    /// </summary>
+    private (Vec3 Min, Vec3 Max)? _boundingBox;
+
     /// <summary>Three coordinates per vertex.</summary>
     public double[] VertexCoordinates { get; }
 
@@ -54,7 +63,9 @@ public sealed class IndexedMesh
     public Vec3 TriangleCentroid(int triangle) =>
         (CornerPosition(triangle, 0) + CornerPosition(triangle, 1) + CornerPosition(triangle, 2)) / 3.0;
 
-    public (Vec3 Min, Vec3 Max) BoundingBox()
+    public (Vec3 Min, Vec3 Max) BoundingBox() => _boundingBox ??= MeasureBoundingBox();
+
+    private (Vec3 Min, Vec3 Max) MeasureBoundingBox()
     {
         if (VertexCount == 0) return (Vec3.Zero, Vec3.Zero);
 

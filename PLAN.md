@@ -644,6 +644,87 @@ fein tessellierte Scheibe (`washer-fine.stl`, 32.768 Dreiecke, 4 Flächen).
 
 ---
 
+## Erster echter Export — Befund ✅
+
+`MagnetConnector Male_10x3.stl`, 5550 Dreiecke, 278 KB. Gemeldetes Symptom: die
+App hängt bei Schritt 7 von 10.
+
+### Was das Modell ist
+
+| Messung | Wert |
+|---|---|
+| Dreiecke nach dem Verschweißen | 5545 (5 entartete verworfen) |
+| Regionen | **2547** — im Schnitt 2,2 Dreiecke je Region |
+| davon mit genau 1 Dreieck | 1222 |
+| davon mit genau 2 Dreiecken | 1223 |
+| Zylinder erkannt | 0 |
+| Kegel erkannt | 0 |
+| offene Kanten | 3 |
+| Flächenwinkel unter 0,5° | 36,8 % — der Rest verteilt sich auf 0,5–10° |
+
+Die Fläche ist fast überall gerundet. Regionenwachstum kann darauf nichts
+zusammenfassen, und die Primitiv-Erkennung findet nichts, weil nichts da ist.
+**Das Modell liegt außerhalb dessen, wofür das Werkzeug gebaut ist** — und der
+Kernel bestätigt das unabhängig: `buildSolid` scheitert an diesen 2547 Flächen
+mit `makeFace: CONSTRUCTION_FAILED`. Selbst ohne jeden Hänger käme kein Körper
+heraus.
+
+### Warum es hing
+
+Drei Ursachen, alle im selben Bereich:
+
+1. **`BoundingBoxDiagonal()` lief über alle Vertices — bei jedem Aufruf.** Jede
+   Toleranz im Projekt ist ein Bruchteil davon, also fragen die Fitter innerhalb
+   ihrer innersten Schleifen danach. Auf einem Würfel unsichtbar, hier der
+   größte Einzelposten. Jetzt einmal berechnet und gemerkt.
+2. **Der Kegel-Fitter probierte jedes Paar von Junctions jeder Region.** Zwei
+   beliebige Kanten einer ebenen Region schneiden sich immer irgendwo, also
+   schlägt eine Region mit einem Dutzend Nachbarn rund siebzig Spitzen vor und
+   durchläuft für jede das Netz. Gemessen: **193.744 Paare, 191.982 Netzläufe,
+   1,75 Mio. besuchte Regionen — und null Treffer.** Jetzt muss erst der
+   Nachbar den Fächer fortsetzen, bevor überhaupt gelaufen wird.
+3. **Drei Sammlungen je Suchlauf.** Liste, Menge und Warteschlange wurden
+   zehntausendfach neu angelegt, für Antworten von zwei bis drei Regionen
+   Länge. Jetzt wiederverwendet — wobei ein angenommener Fund seine Regionsliste
+   kopiert, sonst würde der nächste Lauf sie unter ihm wegziehen.
+
+| Messung (Desktop, Release) | vorher | nachher |
+|---|---|---|
+| Kegel-Erkennung | 5922 ms | **~330 ms** |
+| Zylinder-Erkennung | 442 ms | **~350 ms** |
+| gesamte Rekonstruktion | 6,5 s | **~0,9 s** |
+
+`ReconstructorScaleTests` hält das fest: eine Kugel aus 5000 Dreiecken, die zu
+2500 Regionen zerfällt, muss in unter 2 Sekunden rekonstruiert sein — mit einem
+zweiten Test, der belegt, dass die Kugel wirklich der harte Fall ist und nicht
+etwa doch zusammenfällt.
+
+### Zwei Fehler, die dabei sichtbar wurden
+
+- **Der Kernel meldet `CONSTRUCTION_FAILED` für alles, was er nicht bauen
+  konnte** — der Code bedeutet je nach Anfrage etwas völlig anderes. Ein Modell,
+  das es nie bis zu einem Körper schaffte, wurde dem Nutzer als „Radius zu groß"
+  gemeldet, für einen Radius, den er nie eingegeben hatte. Reset und Fillet
+  haben jetzt getrennte Formulierungen.
+- **Die Netz-Diagnosen erschienen auf Englisch**, mitten zwischen deutschen
+  Meldungen. Die Kernbibliothek stellt weiterhin auf Englisch fest, *was* sie
+  gefunden hat; wie das dem Nutzer gesagt wird, entscheidet jetzt die App.
+
+### Was der Nutzer jetzt sieht
+
+Statt eines Hängers: vier Meldungen, die zusammen erklären, woran es liegt —
+nicht geschlossen, fast nichts zusammengefallen, sieht nach gerundetem Modell
+aus, kein Körper bildbar.
+
+### Offen
+
+Der Debug-Dev-Server bleibt für solche Modelle zäh (Faktor 20–50 gegenüber
+Desktop-Release, und stark schwankend je nach Rechnerlast). Für CAD-artige
+Modelle spielt das keine Rolle — `washer-fine.stl` mit 32.768 Dreiecken braucht
+dort 4,2 s und im Release 1,05 s.
+
+---
+
 ## Stufe 2 — Umsetzung
 
 Ohne diesen Schritt besteht ein Tinkercad-Lochrand aus N Einzelkanten; der
@@ -803,12 +884,9 @@ abgesetzter Kante, nach Stufe 2 eine Platte mit Durchgangsloch.
    Kante. Stand jetzt: 32.768 Dreiecke in 1,05 s (Release) bzw. 4,2 s
    (Debug-Dev-Server), für ein Modell, das zu vier Flächen zusammenfällt.
 
-   Offen bleibt der Fall, in dem die Rekonstruktion *viele* Flächen zurückgibt.
-   Dort dominiert `PrimitiveFitter.FindCones`: es probiert je Region jedes Paar
-   ihrer Junctions und lässt von jedem aus einen Flutfüller laufen. Gemessen
-   7,6 s bei 7.644 Regionen — allerdings an einem defekten Netz, das nie hätte
-   so weit kommen sollen. Vor einer Optimierung ist zu klären, ob ein echtes
-   Tinkercad-Modell diesen Fall überhaupt erreicht.
+   Der zweite Teil - viele Flächen aus der Rekonstruktion - ist inzwischen
+   ebenfalls eingetreten und behoben, siehe „Erster echter Export". Ein echtes
+   Modell erreicht diesen Fall, und zwar genau dann, wenn es gerundet ist.
 5. **Prisma/Zylinder-Mehrdeutigkeit (2.1)** ist prinzipiell nicht auflösbar.
 6. **Downloadgröße**: OCC-WASM 22,2 MB unkomprimiert dominiert, .NET-Runtime
    kommt mit ~2–3 MB komprimiert obendrauf. Durch Service Worker nur einmalig.

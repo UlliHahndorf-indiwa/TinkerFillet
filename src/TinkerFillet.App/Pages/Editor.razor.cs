@@ -96,6 +96,28 @@ public partial class Editor : IAsyncDisposable
     };
 
     /// <summary>
+    /// The finding, worded for the person looking at it.
+    ///
+    /// The core library states what it found in English, because that is where
+    /// its comments and its tests live. Which language the user reads is a
+    /// question about this application, so it is answered here.
+    /// </summary>
+    private string Describe(Diagnostic finding) => finding.Kind switch
+    {
+        DiagnosticKind.OpenEdges =>
+            $"{finding.Count} Kante(n) haben nur ein angrenzendes Dreieck. Das Modell ist nicht "
+            + "geschlossen und lässt sich so nicht in einen Körper verwandeln.",
+        DiagnosticKind.NonManifoldEdges =>
+            $"{finding.Count} Kante(n) haben mehr als zwei angrenzende Dreiecke oder eine "
+            + "widersprüchliche Umlaufrichtung. Das kann kein Körper haben.",
+        DiagnosticKind.NotCadLike =>
+            $"Aus {_model?.Mesh.TriangleCount} Dreiecken wurden {finding.Count} Flächen - es ist "
+            + "also fast nichts zusammengefallen. Das sieht nach einem gerundeten oder gescannten "
+            + "Modell aus, nicht nach CAD-Geometrie. Verrundungen werden hier wenig taugen.",
+        _ => finding.Message,
+    };
+
+    /// <summary>
     /// Re-reads the model at the new threshold.
     ///
     /// The fillets stay: they are stored by where their edge was, not by which
@@ -116,7 +138,7 @@ public partial class Editor : IAsyncDisposable
             _notes.RemoveAll(note => note.Kind == "model");
             foreach (Diagnostic finding in _model.Diagnostics)
             {
-                AddNote(Severity(finding.Kind), finding.Message);
+                AddNote(Severity(finding.Kind), Describe(finding));
             }
 
             AddNote("info", Summary(_model));
@@ -154,7 +176,7 @@ public partial class Editor : IAsyncDisposable
 
             foreach (Diagnostic finding in _model.Diagnostics)
             {
-                AddNote(Severity(finding.Kind), finding.Message);
+                AddNote(Severity(finding.Kind), Describe(finding));
             }
 
             AddNote("info", Summary(_model));
@@ -205,6 +227,15 @@ public partial class Editor : IAsyncDisposable
                     $"{failed} Schritt(e) konnten nicht angewendet werden und sind orange markiert. "
                     + "Kante erneut anklicken, um sie zu ersetzen.", kind: "replay");
             }
+        }
+        // The kernel refused the model itself, which is not a crash and not
+        // something a restart would help with. Nothing else in the list can be
+        // applied either, so the list stays as it is and the user is told why.
+        catch (KernelOperationException error)
+        {
+            _state = null;
+            _notes.RemoveAll(note => note.Kind == "replay");
+            AddNote("error", error.Message, kind: "replay");
         }
         // The [JSImport] flavour, not the IJSRuntime one - see WorkerKernelSession.
         catch (System.Runtime.InteropServices.JavaScript.JSException error)

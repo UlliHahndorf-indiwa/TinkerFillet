@@ -30,8 +30,15 @@ internal sealed class WorkerKernelSession : IKernelSession
 
     public async Task<KernelState> ResetAsync(BrepRecipe recipe, CancellationToken cancellationToken = default)
     {
-        var answer = await OccBridge.ResetAsync(JsonSerializer.Serialize(recipe, Json));
-        return Parse(answer);
+        try
+        {
+            var answer = await OccBridge.ResetAsync(JsonSerializer.Serialize(recipe, Json));
+            return Parse(answer);
+        }
+        catch (System.Runtime.InteropServices.JavaScript.JSException error)
+        {
+            throw new KernelOperationException(ReadableBuildFailure(error.Message));
+        }
     }
 
     public async Task<KernelState> FilletAsync(
@@ -67,7 +74,15 @@ internal sealed class WorkerKernelSession : IKernelSession
         return new KernelState(answer.Handle, answer.Graph);
     }
 
-    /// <summary>Turns the kernel's own wording into something worth showing a user.</summary>
+    /// <summary>
+    /// Turns the kernel's own wording into something worth showing a user.
+    ///
+    /// The kernel reports CONSTRUCTION_FAILED for anything it could not build,
+    /// so the same code means two very different things depending on what was
+    /// asked of it. Told from the wrong end it is worse than no message: a
+    /// model that never got as far as a solid used to be reported as a radius
+    /// that would not fit, for a radius the user had not entered.
+    /// </summary>
     public static string Readable(string message) => message switch
     {
         var text when text.Contains("CONSTRUCTION_FAILED", StringComparison.Ordinal) =>
@@ -75,6 +90,16 @@ internal sealed class WorkerKernelSession : IKernelSession
         var text when text.Contains("no shape with handle", StringComparison.Ordinal) =>
             "Die Form ist nicht mehr vorhanden. Der Verlauf wird neu berechnet.",
         var text => text,
+    };
+
+    /// <summary>The same, for the step that turns the recipe into a solid.</summary>
+    public static string ReadableBuildFailure(string message) => message switch
+    {
+        var text when text.Contains("CONSTRUCTION_FAILED", StringComparison.Ordinal) =>
+            "Aus diesem Modell ließ sich kein Körper bilden. Die Flächen, die aus den Dreiecken "
+            + "gewonnen wurden, ergeben keine geschlossene Hülle - das passiert bei gerundeten oder "
+            + "gescannten Modellen, für die dieses Werkzeug nicht gedacht ist.",
+        var text => "Aus diesem Modell ließ sich kein Körper bilden. " + text,
     };
 
     private sealed record WorkerAnswer(int Handle, EdgeGraph Graph);

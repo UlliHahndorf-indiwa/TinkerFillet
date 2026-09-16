@@ -246,6 +246,42 @@ public static class MeshFixtures
         return new TriangleSoup([.. triangles]);
     }
 
+    /// <summary>
+    /// A sphere as rings of quads: the shape region growing can do least with.
+    ///
+    /// Nothing here is flat, so each quad comes out as its own tiny region and
+    /// the region count lands near half the triangle count. Real models with
+    /// rounded surfaces behave the same way, and they are what the fitters have
+    /// to stay affordable on - a fitter that is quadratic in the region count
+    /// looks instant on a cube and hangs on this.
+    /// </summary>
+    public static TriangleSoup Sphere(int bands = 12, double radius = 10)
+    {
+        List<double> triangles = new();
+
+        Vec3 On(int band, int segment)
+        {
+            var phi = Math.PI * band / bands;
+            var theta = 2 * Math.PI * segment / bands;
+            return new Vec3(
+                Math.Sin(phi) * Math.Cos(theta),
+                Math.Sin(phi) * Math.Sin(theta),
+                Math.Cos(phi)) * radius;
+        }
+
+        for (var band = 0; band < bands; band++)
+        {
+            for (var segment = 0; segment < bands; segment++)
+            {
+                AppendQuad(triangles,
+                    On(band, segment), On(band + 1, segment),
+                    On(band + 1, segment + 1), On(band, segment + 1));
+            }
+        }
+
+        return new TriangleSoup([.. triangles]);
+    }
+
     /// <summary>A single triangle: the simplest mesh with an open boundary.</summary>
     public static TriangleSoup SingleTriangle()
     {
