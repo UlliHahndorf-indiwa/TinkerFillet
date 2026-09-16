@@ -27,8 +27,15 @@ const EDGE = new Color(0x2a2e33);
 const HOVER = new Color(0x5aa9e6);
 const SELECTED = new Color(0xf08a24);
 
-/** Half-width of the block of pixels searched around the cursor when picking. */
-const PICK_RADIUS = 6;
+/**
+ * How far from the cursor an edge may be and still be picked, in CSS pixels.
+ *
+ * A line is one pixel wide however thick the material asks for - WebGL ignores
+ * line width - so without a search around the cursor the user would have to hit
+ * a hairline exactly. This is the tolerance zone, and it is in CSS pixels
+ * because that is the space the user is aiming in.
+ */
+const PICK_TOLERANCE = 9;
 
 let renderer = null;
 let camera = null;
@@ -46,7 +53,7 @@ let idSolid = null;
 /** Segment ranges in the line geometry, by edge id. */
 let segmentRanges = new Map();
 let highlighted = new Set();
-let hovered = -1;
+let hovered = new Set();
 
 let needsRender = false;
 
@@ -87,7 +94,14 @@ function resize() {
   const height = canvas.clientHeight || 1;
 
   renderer.setSize(width, height, false);
-  idTarget.setSize(width, height);
+
+  // In drawing-buffer pixels, like the canvas itself. Sizing this in CSS pixels
+  // instead is invisible at 100% display scaling and wrong at any other: the
+  // cursor is scaled into buffer space before the read, so on a 150% display
+  // the search landed two thirds of the way towards the top left corner and
+  // the user could not hit anything they aimed at.
+  const ratio = renderer.getPixelRatio();
+  idTarget.setSize(Math.round(width * ratio), Math.round(height * ratio));
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   needsRender = true;
@@ -228,10 +242,16 @@ export function setHighlight(edgeIds) {
   repaintEdges();
 }
 
-export function setHover(edgeId) {
-  if (hovered === edgeId) return;
-  hovered = edgeId;
+export function setHover(edgeIds) {
+  if (sameSet(hovered, edgeIds)) return;
+  hovered = edgeIds;
   repaintEdges();
+}
+
+function sameSet(a, b) {
+  if (a.size !== b.size) return false;
+  for (const value of a) if (!b.has(value)) return false;
+  return true;
 }
 
 function repaintEdges() {
@@ -239,7 +259,7 @@ function repaintEdges() {
   const colors = edgeLines.geometry.getAttribute("color");
 
   for (const [edgeId, range] of segmentRanges) {
-    const colour = highlighted.has(edgeId) ? SELECTED : edgeId === hovered ? HOVER : EDGE;
+    const colour = highlighted.has(edgeId) ? SELECTED : hovered.has(edgeId) ? HOVER : EDGE;
     for (let i = 0; i < range.vertexCount; i++)
       colors.setXYZ(range.firstVertex + i, colour.r, colour.g, colour.b);
   }
@@ -267,9 +287,10 @@ export function pick(x, y) {
   const centreX = Math.round(x * ratio);
   const centreY = Math.round((renderer.domElement.clientHeight - y) * ratio); // GL counts from the bottom
 
-  const size = PICK_RADIUS * 2 + 1;
-  const left = Math.max(0, centreX - PICK_RADIUS);
-  const bottom = Math.max(0, centreY - PICK_RADIUS);
+  const reach = Math.max(1, Math.round(PICK_TOLERANCE * ratio));
+  const size = reach * 2 + 1;
+  const left = Math.max(0, Math.min(idTarget.width - size, centreX - reach));
+  const bottom = Math.max(0, Math.min(idTarget.height - size, centreY - reach));
   const pixels = new Uint8Array(size * size * 4);
   renderer.readRenderTargetPixels(idTarget, left, bottom, size, size, pixels);
 

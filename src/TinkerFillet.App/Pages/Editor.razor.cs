@@ -251,15 +251,27 @@ public partial class Editor : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Shows the whole chain under the cursor, not just the edge beneath it.
+    ///
+    /// A click takes the chain, so the chain is what has to light up first.
+    /// Highlighting the one edge instead told the user almost nothing: on a
+    /// rounded rim that is one arc of twenty, and it left them guessing what a
+    /// click would actually round.
+    /// </summary>
     private void OnMouseMove(MouseEventArgs args)
     {
-        if (_model is null || _busy || _chain is not null) return;
+        if (_state is null || _busy || _chain is not null) return;
 
         var picked = OccBridge.Pick(args.OffsetX, args.OffsetY);
         if (picked == _hovered) return;
 
         _hovered = picked;
-        OccBridge.SetHover(picked);
+        IReadOnlyList<int> chain = picked < 0
+            ? []
+            : ChainPropagator.Propagate(_state.Graph, picked, Chain);
+
+        OccBridge.SetHover(JsonSerializer.Serialize(chain, WorkerKernelSession.Json));
     }
 
     private void OnClick(MouseEventArgs args)
@@ -377,7 +389,9 @@ public partial class Editor : IAsyncDisposable
     private void ClearChain()
     {
         _chain = null;
+        _hovered = -1;
         OccBridge.SetHighlight("[]");
+        OccBridge.SetHover("[]");
     }
 
     private Task Busy(string message, Func<Task> work) => Busy(message, 0, work);

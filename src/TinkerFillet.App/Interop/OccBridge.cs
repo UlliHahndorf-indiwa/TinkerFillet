@@ -44,8 +44,13 @@ internal static partial class OccBridge
     [JSImport("setHighlight", Module)]
     public static partial void SetHighlight(string edgeIdsJson);
 
+    /// <summary>
+    /// The chain the cursor is over, as a list of edge ids. A whole chain
+    /// rather than one edge, because a click takes the chain and the user
+    /// should see that before committing to it.
+    /// </summary>
     [JSImport("setHover", Module)]
-    public static partial void SetHover(int edgeId);
+    public static partial void SetHover(string edgeIdsJson);
 
     /// <summary>Edge under the given canvas coordinates, or -1.</summary>
     [JSImport("pick", Module)]

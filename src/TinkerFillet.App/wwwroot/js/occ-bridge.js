@@ -90,8 +90,8 @@ export function setHighlight(edgeIdsJson) {
   viewport.setHighlight(new Set(JSON.parse(edgeIdsJson)));
 }
 
-export function setHover(edgeId) {
-  viewport.setHover(edgeId);
+export function setHover(edgeIdsJson) {
+  viewport.setHover(new Set(JSON.parse(edgeIdsJson)));
 }
 
 /** Edge under the cursor, or -1. Reads one pixel of an off-screen id buffer. */

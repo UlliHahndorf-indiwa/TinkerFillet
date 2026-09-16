@@ -855,6 +855,48 @@ das, was man erwartet.
 
 ---
 
+## Kante anklicken — ging auf skalierten Bildschirmen gar nicht ✅
+
+Gemeldet: „Ich sehe das Objekt, kann aber keine Kante selektieren."
+
+### Die Trefferzone saß woanders als das Bild
+
+`resize()` setzte die Pick-Textur in **CSS-Pixeln**, `pick()` rechnet die
+Cursorposition aber mit dem Pixelverhältnis in Pufferkoordinaten um. Bei 100 %
+Anzeigeskalierung ist beides dasselbe und nichts fällt auf. Gemessen bei 150 %:
+
+| | |
+|---|---|
+| Zeichenpuffer | 1056 × 1072 |
+| Pick-Textur | **704 × 715** |
+| Folge | Suche landet bei **2/3** der sichtbaren Position |
+
+Der Nutzer zielt auf die Kante und der Code schaut links oben daneben. Ein
+Raster über die ganze Leinwand fand 191 Treffer statt 434, und alle an der
+falschen Stelle. Die Textur wird jetzt wie die Leinwand in Puffer-Pixeln
+angelegt.
+
+Windows läuft üblicherweise auf 125 % oder 150 %. Auf meinem Prüfpanel stand
+`devicePixelRatio` auf 1 — deshalb ist es bei allen bisherigen Tests nie
+aufgefallen, und deshalb wurde es erst durch ein erzwungenes 1,5 beweisbar.
+
+### Die Toleranzzone war zu klein und schrumpfte mit der Skalierung
+
+WebGL zeichnet Linien immer einen Pixel breit — `linewidth` wird ignoriert, der
+„dicke Linien"-Teil des Entwurfs war nie umsetzbar. Die Suche um den Cursor
+*ist* deshalb die Toleranzzone, und sie war in Gerätepixeln angegeben: 6 Pixel,
+auf einem 150 %-Bildschirm also 4 CSS-Pixel. Jetzt 9 CSS-Pixel, hochgerechnet.
+
+### Beim Überfahren leuchtete eine Kante statt der Kette
+
+Der Plan sagt „überfahrene Kette hellblau". Gebaut war: **eine** Kante hellblau.
+An einem gerundeten Rand ist das einer von zwanzig Bögen — der Nutzer sieht
+einen Strich aufleuchten und weiß nicht, was ein Klick tut. Die Kette wird jetzt
+schon beim Überfahren propagiert und vollständig hervorgehoben; an der getesteten
+Stelle sind das **51 Segmente statt einem**.
+
+---
+
 ## Stufe 2 — Umsetzung
 
 Ohne diesen Schritt besteht ein Tinkercad-Lochrand aus N Einzelkanten; der
