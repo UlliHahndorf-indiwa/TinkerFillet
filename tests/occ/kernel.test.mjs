@@ -107,22 +107,32 @@ test("the cube's twelve edges are all reported as sharp and convex", async () =>
   }
 });
 
-test("a hole's edges are reported as concave", async () => {
+test("only the corners inside a hole are concave, not its rims", async () => {
   // A convex and a concave right angle both put ninety degrees between the
   // outward normals, so this is the assertion that proves the sign is computed
-  // from the geometry rather than from the angle.
+  // from the material rather than from the angle.
+  //
+  // Only the four vertical corners inside the hole are concave: there the
+  // material wraps round through 270 degrees. Every rim is convex - at the top
+  // of the bore the material fills a quarter turn, exactly as it does along the
+  // outside of the plate. Getting this backwards is easy and was how an earlier
+  // version had it.
   const kernel = await OcctKernel.init();
   const solid = buildSolid(kernel, plateWithHoleRecipe());
 
   const { edges } = edgeGraph(kernel, solid);
-
   const concave = edges.filter((edge) => edge.convex === false);
-  const convex = edges.filter((edge) => edge.convex === true);
 
-  // The hole contributes twelve: four around each rim, plus the four vertical
-  // corners inside it, where the material wraps round through 270 degrees.
-  assert.equal(concave.length, 12);
-  assert.equal(convex.length, 12, "the plate's own outline stays convex");
+  assert.equal(edges.length, 24);
+  assert.equal(concave.length, 4);
+  assert.equal(edges.filter((edge) => edge.convex === true).length, 20);
+
+  // All four sit half way up the plate, at the corners of the hole.
+  for (const edge of concave) {
+    assert.ok(Math.abs(edge.midpoint.z - 2) < 1e-6, `z ${edge.midpoint.z}`);
+    for (const value of [edge.midpoint.x, edge.midpoint.y])
+      assert.ok(Math.abs(value - 7) < 1e-6 || Math.abs(value - 13) < 1e-6, `at ${value}`);
+  }
 });
 
 test("edge midpoints sit on the edge they describe", async () => {
@@ -262,9 +272,11 @@ test("a recipe with no faces is refused", async () => {
 });
 
 test("an unsupported surface kind is refused rather than flattened", async () => {
+  // Cones are not recovered yet. Silently treating one as its boundary polygon
+  // would produce a shape that looks plausible and is wrong.
   const kernel = await OcctKernel.init();
   const recipe = cubeRecipe();
-  recipe.faces[0].kind = "Cylinder";
+  recipe.faces[0].kind = "Cone";
 
-  assert.throws(() => buildSolid(kernel, recipe), /not supported yet/);
+  assert.throws(() => buildSolid(kernel, recipe), /not supported/);
 });

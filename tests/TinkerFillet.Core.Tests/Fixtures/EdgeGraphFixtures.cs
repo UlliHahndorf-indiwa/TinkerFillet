@@ -112,6 +112,72 @@ public static class EdgeGraphFixtures
         return new EdgeGraph { Edges = edges, VertexPositions = positions, FaceCount = 4 };
     }
 
+    /// <summary>
+    /// A recovered rim as the kernel actually hands it over: two arcs meeting at
+    /// the cylinder's seam, plus the seam itself.
+    ///
+    /// The seam has the same face on both sides, so it has no dihedral angle.
+    /// If that were mistaken for a feature, the two arcs would look like a
+    /// three-way junction and the chain would stop dead at the seam.
+    /// </summary>
+    public static EdgeGraph RimSplitAtSeam(double radius = 8)
+    {
+        // The two points where the seam meets the rim.
+        List<Vec3> positions = [new(radius, 0, 0), new(-radius, 0, 0), new(radius, 0, -5)];
+
+        var longArc = new EdgeInfo
+        {
+            Id = 0,
+            Midpoint = new Vec3(0, radius, 0),
+            Tangent = new Vec3(-1, 0, 0),
+            Length = 1.5 * Math.PI * radius,
+            NormalA = new Vec3(0, 1, 0),
+            NormalB = new Vec3(0, 0, 1),
+            DihedralDegrees = 90,
+            Convex = true,
+            Faces = [0, 1],
+            Vertices = [0, 1],
+            // The rim is a circle in the z = 0 plane, so at (r,0,0) it runs
+            // along +Y and at (-r,0,0) along -Y. The chord to the midpoint
+            // would claim 45 degrees off in both cases.
+            EndTangents = [new EndTangent(0, new Vec3(0, 1, 0)), new EndTangent(1, new Vec3(0, -1, 0))],
+        };
+
+        var shortArc = longArc with
+        {
+            Id = 1,
+            Midpoint = new Vec3(0, -radius, 0),
+            Tangent = new Vec3(1, 0, 0),
+            Length = 0.5 * Math.PI * radius,
+            NormalA = new Vec3(0, -1, 0),
+            // The other way round: this arc closes the circle underneath.
+            EndTangents = [new EndTangent(0, new Vec3(0, -1, 0)), new EndTangent(1, new Vec3(0, 1, 0))],
+        };
+
+        // Runs down the cylinder from the rim. Same face either side, so the
+        // worker reports no dihedral angle for it.
+        var seam = new EdgeInfo
+        {
+            Id = 2,
+            Midpoint = new Vec3(radius, 0, -2.5),
+            Tangent = new Vec3(0, 0, 1),
+            Length = 5,
+            NormalA = null,
+            NormalB = null,
+            DihedralDegrees = null,
+            Convex = null,
+            Faces = [0],
+            Vertices = [0, 2],
+        };
+
+        return new EdgeGraph
+        {
+            Edges = [longArc, shortArc, seam],
+            VertexPositions = positions,
+            FaceCount = 2,
+        };
+    }
+
     private static EdgeInfo StraightEdge(
         int id, Vec3 from, Vec3 to, int[] vertices, double dihedralDegrees, int[] faces)
     {

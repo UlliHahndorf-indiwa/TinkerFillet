@@ -121,3 +121,26 @@ function writeBinaryStl(path, triangles) {
 writeBinaryStl(join(out, "cube.stl"), cube());
 writeBinaryStl(join(out, "plate-with-hole.stl"), plateWithHole());
 writeBinaryStl(join(out, "prism-20.stl"), prism());
+
+/** Washer: a convex outer cylinder and a concave bore, both tessellated. */
+function washer(sides = 24, outerRadius = 20, holeRadius = 8, thickness = 6) {
+  const on = (r, i, z) => {
+    const a = (2 * Math.PI * i) / sides;
+    return [r * Math.cos(a), r * Math.sin(a), z];
+  };
+  const triangles = [];
+  for (let i = 0; i < sides; i++) {
+    const j = (i + 1) % sides;
+    quad(triangles, on(holeRadius, i, thickness), on(outerRadius, i, thickness),
+      on(outerRadius, j, thickness), on(holeRadius, j, thickness));
+    quad(triangles, on(holeRadius, i, 0), on(holeRadius, j, 0),
+      on(outerRadius, j, 0), on(outerRadius, i, 0));
+    quad(triangles, on(outerRadius, i, 0), on(outerRadius, j, 0),
+      on(outerRadius, j, thickness), on(outerRadius, i, thickness));
+    quad(triangles, on(holeRadius, i, 0), on(holeRadius, i, thickness),
+      on(holeRadius, j, thickness), on(holeRadius, j, 0));
+  }
+  return triangles;
+}
+
+writeBinaryStl(join(out, "washer.stl"), washer());

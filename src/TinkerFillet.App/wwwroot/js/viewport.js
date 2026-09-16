@@ -151,9 +151,14 @@ function buildEdges(mesh) {
       }
     }
 
-    // The worker reports edges in the solid's own order, so the group index is
-    // the edge id the C# side uses.
-    segmentRanges.set(group, { firstVertex, vertexCount: positions.length / 3 - firstVertex });
+    // The wireframe's group order is the kernel's own and is not the solid's
+    // edge order, so the id comes from the tessellation rather than from the
+    // loop counter. Assuming otherwise would hand C# the wrong edge for a
+    // click - silently, and only on some shapes.
+    const edgeId = mesh.edgeIds?.[group] ?? group;
+    if (edgeId >= 0) {
+      segmentRanges.set(edgeId, { firstVertex, vertexCount: positions.length / 3 - firstVertex });
+    }
   }
 
   const geometry = new BufferGeometry();

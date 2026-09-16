@@ -151,6 +151,57 @@ public static class MeshFixtures
         return new TriangleSoup([.. triangles]);
     }
 
+    /// <summary>
+    /// A washer: a disc of <paramref name="outerRadius"/> with a concentric
+    /// hole, tessellated the way a CAD tool does it, with every vertex sitting
+    /// exactly on the true circle.
+    ///
+    /// This is the shape stage 2 exists for, and it carries both cases at once:
+    /// the outer wall is a convex cylinder, the bore a concave one. Both arrive
+    /// as <paramref name="sides"/> separate flat strips, and each rim as that
+    /// many separate edges.
+    ///
+    /// Built entirely from the two rings, so every triangle meets its
+    /// neighbours edge to edge.
+    /// </summary>
+    public static TriangleSoup Washer(
+        int sides = 20, double outerRadius = 20, double holeRadius = 8, double thickness = 6)
+    {
+        var triangles = new List<double>();
+
+        Vec3 On(double radius, int index, double z)
+        {
+            var angle = 2 * Math.PI * index / sides;
+            return new Vec3(radius * Math.Cos(angle), radius * Math.Sin(angle), z);
+        }
+
+        for (var i = 0; i < sides; i++)
+        {
+            var next = (i + 1) % sides;
+
+            // Top and bottom annulus.
+            AppendQuad(triangles,
+                On(holeRadius, i, thickness), On(outerRadius, i, thickness),
+                On(outerRadius, next, thickness), On(holeRadius, next, thickness));
+            AppendQuad(triangles,
+                On(holeRadius, i, 0), On(holeRadius, next, 0),
+                On(outerRadius, next, 0), On(outerRadius, i, 0));
+
+            // Outer wall, facing away from the axis.
+            AppendQuad(triangles,
+                On(outerRadius, i, 0), On(outerRadius, next, 0),
+                On(outerRadius, next, thickness), On(outerRadius, i, thickness));
+
+            // Bore wall, facing towards the axis - into the hole, away from
+            // the material.
+            AppendQuad(triangles,
+                On(holeRadius, i, 0), On(holeRadius, i, thickness),
+                On(holeRadius, next, thickness), On(holeRadius, next, 0));
+        }
+
+        return new TriangleSoup([.. triangles]);
+    }
+
     /// <summary>A single triangle: the simplest mesh with an open boundary.</summary>
     public static TriangleSoup SingleTriangle()
     {

@@ -19,6 +19,19 @@ export const LINEAR_DEFLECTION = 0.02;
 export const ANGULAR_DEFLECTION = 0.209; // 12 degrees
 
 /**
+ * Sampling used for the edge graph rather than for display.
+ *
+ * Midpoints and end tangents are read off sampled polylines, and the first
+ * segment's chord sits half a sample angle away from the true tangent. At
+ * display fineness that is about four degrees on a radius of 8 and eleven on a
+ * radius of 1 - uncomfortably close to the angle at which a chain gives up.
+ * Sampling twenty times finer brings it to roughly one degree on a radius of 8
+ * and under three on a radius of 1, and edge graphs are small enough that the
+ * extra points cost nothing worth measuring.
+ */
+const GRAPH_DEFLECTION = LINEAR_DEFLECTION / 20;
+
+/**
  * Builds a solid from the face description produced on the C# side.
  *
  * @param recipe {{faces: Array<{kind: string, outer: {points: number[]},
@@ -29,17 +42,16 @@ export function buildSolid(kernel, recipe) {
   if (!recipe?.faces?.length) throw new Error("the recipe contains no faces");
 
   const faces = recipe.faces.map((face, index) => {
-    if (face.kind !== "Plane" && face.kind !== "plane") {
-      // Stage 2 introduces cylinder and cone. Failing loudly beats silently
-      // flattening a curved face into its boundary polygon.
-      throw new Error(`face ${index}: surface kind '${face.kind}' is not supported yet`);
-    }
+    const kind = String(face.kind).toLowerCase();
 
-    let built = kernel.makeFace(wireFromPoints(kernel, face.outer.points, index));
+    if (kind === "cylinder") return cylindricalFace(kernel, face.surfaceParameters, index);
+    if (kind !== "plane") throw new Error(`face ${index}: surface kind '${face.kind}' is not supported`);
+
+    let built = kernel.makeFace(wireFromLoop(kernel, face.outer, index));
     if (face.holes?.length) {
       built = kernel.addHolesInFace(
         built,
-        face.holes.map((hole) => wireFromPoints(kernel, hole.points, index)),
+        face.holes.map((hole) => wireFromLoop(kernel, hole, index)),
       );
     }
     return built;
@@ -48,7 +60,63 @@ export function buildSolid(kernel, recipe) {
   return kernel.buildSolidFromFaces(faces, recipe.sewTolerance);
 }
 
-function wireFromPoints(kernel, points, faceIndex) {
+/**
+ * The lateral surface of a cylinder, placed on the given axis.
+ *
+ * Taken from a whole cylinder rather than built from a surface and a wire,
+ * because a full one is already bounded by exactly the two rims we want - and
+ * those rims are then the same exact circles the neighbouring flat faces were
+ * given, which is what lets sewing close the solid.
+ */
+function cylindricalFace(kernel, parameters, faceIndex) {
+  if (parameters?.length !== 8) {
+    throw new Error(`face ${faceIndex}: a cylinder needs 8 parameters, got ${parameters?.length}`);
+  }
+
+  const [bx, by, bz, ax, ay, az, radius, height] = parameters;
+  if (!(radius > 0) || !(height > 0)) {
+    throw new Error(`face ${faceIndex}: cylinder radius ${radius} and height ${height} must be positive`);
+  }
+
+  const solid = kernel.makeCylinder(radius, height);
+  const lateral = kernel
+    .getSubShapes(solid, "face")
+    .find((face) => kernel.surfaceType(face) === "cylinder");
+  if (!lateral) throw new Error(`face ${faceIndex}: the kernel produced no cylindrical surface`);
+
+  return kernel.transform(lateral, placement({ x: bx, y: by, z: bz }, { x: ax, y: ay, z: az }));
+}
+
+/**
+ * Row-major 3x4 affine taking the unit cylinder - axis +Z, base at the origin -
+ * onto the given axis and base point.
+ */
+function placement(base, axis) {
+  const w = normalize(axis);
+  const helper = Math.abs(w.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+  const u = normalize(cross(w, helper));
+  const v = cross(w, u);
+
+  return [
+    u.x, v.x, w.x, base.x,
+    u.y, v.y, w.y, base.y,
+    u.z, v.z, w.z, base.z,
+  ];
+}
+
+function wireFromLoop(kernel, loop, faceIndex) {
+  const kind = String(loop?.kind ?? "polygon").toLowerCase();
+
+  if (kind === "circle") {
+    const [cx, cy, cz, nx, ny, nz, radius] = loop.circleParameters;
+    // The normal also carries the winding, which is how the kernel tells an
+    // outline from a hole.
+    return kernel.makeWire([
+      kernel.makeCircleEdge({ x: cx, y: cy, z: cz }, { x: nx, y: ny, z: nz }, radius),
+    ]);
+  }
+
+  const points = loop.points;
   const count = points.length / 3;
   if (count < 3) throw new Error(`face ${faceIndex}: a loop needs at least 3 points, got ${count}`);
 
@@ -59,6 +127,12 @@ function wireFromPoints(kernel, points, faceIndex) {
   }
   return kernel.makeWire(edges);
 }
+
+const cross = (a, b) => ({
+  x: a.y * b.z - a.z * b.y,
+  y: a.z * b.x - a.x * b.z,
+  z: a.x * b.y - a.y * b.x,
+});
 
 const at = (points, index) => ({
   x: points[index * 3],
@@ -107,8 +181,7 @@ export function edgeGraph(kernel, solid) {
 
   const scale = boundingBoxDiagonal(kernel, solid);
   const normalAt = faceShapes.map((face) => outwardNormalFunction(kernel, solid, face, scale));
-  const faceCentres = faceShapes.map((face) => kernel.getSurfaceCenterOfMass(face));
-  const polylines = edgePolylines(kernel, solid, indexByHash);
+  const polylines = edgePolylines(kernel, solid, indexByHash, GRAPH_DEFLECTION);
 
   const edges = edgeShapes.map((edgeShape, index) => {
     const adjacent = facesOfEdge[index];
@@ -129,6 +202,13 @@ export function edgeGraph(kernel, solid) {
         .filter((vertex) => vertex !== undefined),
       polyline,
     };
+
+    // Which way the edge actually leaves each of its endpoints.
+    //
+    // Needed because the chord from an endpoint to the midpoint is only the
+    // direction for a straight edge. On a three-quarter arc it is ninety
+    // degrees out, and a chain would break at every seam.
+    base.endTangents = endTangents(polyline, base.vertices, vertexPositions);
 
     // An edge with anything other than two adjacent faces is not a feature of a
     // solid's surface - it is a defect that survived sewing. It is reported
@@ -151,7 +231,7 @@ export function edgeGraph(kernel, solid) {
       // Angle between the outward normals: zero where the surface continues
       // smoothly, ninety at a cube edge. This is what "sharp" means here.
       dihedralDegrees: (angleBetween(normalA, normalB) * 180) / Math.PI,
-      convex: isConvex(midpoint, normalA, normalB, faceCentres[adjacent[0]], faceCentres[adjacent[1]]),
+      convex: isConvexAt(kernel, solid, midpoint, tangent, scale),
     };
   });
 
@@ -159,21 +239,41 @@ export function edgeGraph(kernel, solid) {
 }
 
 /**
- * Convex or concave, decided by where the neighbouring face lies relative to
- * this one's plane.
+ * Convex or concave, decided by how much material surrounds the edge.
  *
- * The angle between the outward normals cannot tell the two apart - a convex
- * and a concave right angle both give ninety degrees. What separates them is
- * the side: at a convex edge each face falls away behind the other's normal, at
- * a concave edge it rises in front of it.
+ * The angle between the outward normals cannot tell the two apart: a convex and
+ * a concave right angle both measure ninety degrees. What differs is the solid
+ * angle the material occupies - a quarter turn around a convex edge, three
+ * quarters around a concave one - so that is what gets measured, by probing a
+ * ring of points around the edge and asking the kernel which are inside.
+ *
+ * An earlier version compared the direction towards each neighbouring face's
+ * centre of mass. That is wrong for any face whose centroid is not on it: the
+ * centre of an annulus sits in the middle of its own hole, so every bore rim
+ * came out concave when all of them are convex.
  */
-function isConvex(midpoint, normalA, normalB, centreA, centreB) {
-  const towardsB = normalize(subtract(centreB, midpoint));
-  const towardsA = normalize(subtract(centreA, midpoint));
+function isConvexAt(kernel, solid, midpoint, tangent, scale) {
+  const probes = 16;
+  const reach = scale * 1e-4;
 
-  // Both readings should agree. Averaging them keeps a face whose centre of
-  // mass sits awkwardly - one with a large hole, say - from deciding alone.
-  return dot(towardsB, normalA) + dot(towardsA, normalB) < 0;
+  const helper = Math.abs(tangent.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+  const u = normalize(cross(tangent, helper));
+  const v = cross(tangent, u);
+
+  let inside = 0;
+  for (let i = 0; i < probes; i++) {
+    // Offset half a step so no probe lands exactly on a face, where the
+    // classification is a coin toss.
+    const angle = (2 * Math.PI * (i + 0.5)) / probes;
+    const point = {
+      x: midpoint.x + (u.x * Math.cos(angle) + v.x * Math.sin(angle)) * reach,
+      y: midpoint.y + (u.y * Math.cos(angle) + v.y * Math.sin(angle)) * reach,
+      z: midpoint.z + (u.z * Math.cos(angle) + v.z * Math.sin(angle)) * reach,
+    };
+    if (kernel.containsPoint(solid, point)) inside++;
+  }
+
+  return inside * 2 < probes;
 }
 
 /**
@@ -286,9 +386,31 @@ function interiorParameters(kernel, face, bounds) {
   };
 }
 
+/**
+ * For each endpoint, the direction the edge sets off in from there.
+ *
+ * Read off the sampled polyline rather than the curve's parametrisation,
+ * because which end that starts at is the kernel's business and not
+ * necessarily the order the endpoints come back in.
+ */
+function endTangents(polyline, vertices, vertexPositions) {
+  if (polyline.length < 2 || vertices.length === 0) return [];
+
+  const first = polyline[0];
+  const last = polyline[polyline.length - 1];
+  const fromFirst = normalize(subtract(polyline[1], first));
+  const fromLast = normalize(subtract(polyline[polyline.length - 2], last));
+
+  return vertices.map((vertex) => {
+    const position = vertexPositions[vertex];
+    const atFirst = distance(position, first) <= distance(position, last);
+    return { vertex, direction: atFirst ? fromFirst : fromLast };
+  });
+}
+
 /** Sampled points along every edge, keyed by edge index. Used for display, picking and midpoints. */
-function edgePolylines(kernel, solid, indexByHash) {
-  const data = kernel.wireframe(solid, LINEAR_DEFLECTION);
+function edgePolylines(kernel, solid, indexByHash, deflection = LINEAR_DEFLECTION) {
+  const data = kernel.wireframe(solid, deflection);
   const result = [];
 
   for (let group = 0; group < data.edgeCount; group++) {
@@ -404,7 +526,26 @@ export function tessellate(kernel, solid) {
     edgePoints: wire.points,
     edgeGroups: wire.edgeGroups,
     edgeCount: wire.edgeCount,
+    // Which edge each wireframe group belongs to. The group order is the
+    // kernel's own and is not the solid's edge order, so the viewport must be
+    // told rather than left to assume - it is these numbers the user's click
+    // eventually turns into.
+    edgeIds: wireframeEdgeIds(kernel, solid, wire),
   };
+}
+
+function wireframeEdgeIds(kernel, solid, wire) {
+  const indexByHash = new Map();
+  kernel
+    .subShapeHashes(solid, "edge", HASH_UPPER_BOUND)
+    .forEach((hash, index) => indexByHash.set(hash, index));
+
+  const ids = new Int32Array(wire.edgeCount);
+  for (let group = 0; group < wire.edgeCount; group++) {
+    const hash = wire.edgeGroups[group * 3 + 2];
+    ids[group] = indexByHash.get(hash) ?? -1;
+  }
+  return ids;
 }
 
 function boundingBoxDiagonal(kernel, shape) {

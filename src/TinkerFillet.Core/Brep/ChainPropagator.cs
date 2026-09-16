@@ -113,14 +113,28 @@ public static class ChainPropagator
         // Two features that merely touch at a point are not one feature.
         if (!current.Faces.Intersect(candidate.Faces).Any()) return null;
 
-        var position = graph.VertexPositions[vertex];
-        var arriving = (position - current.Midpoint).Normalized();
-        var leaving = (candidate.Midpoint - position).Normalized();
-
-        // Directions are read from the vertex outwards rather than from the
-        // edges' own parametrisation, which has no guaranteed orientation.
-        var kink = arriving.AngleTo(leaving) * 180 / Math.PI;
+        var kink = KinkAt(graph, vertex, current, candidate) * 180 / Math.PI;
         return kink <= options.KinkAngleDegrees ? candidate : null;
+    }
+
+    /// <summary>
+    /// How sharply the boundary turns at this vertex, in radians.
+    ///
+    /// Both edges' directions are taken leaving the shared vertex, so a smooth
+    /// continuation has them pointing opposite ways and the turn is zero.
+    /// Reading them from the vertex outwards sidesteps the edges' own
+    /// parametrisation, which has no guaranteed orientation.
+    /// </summary>
+    private static double KinkAt(EdgeGraph graph, int vertex, EdgeInfo current, EdgeInfo candidate)
+    {
+        var position = graph.VertexPositions.Count > vertex ? graph.VertexPositions[vertex] : Vec3.Zero;
+
+        // The chord to the midpoint is only the direction for a straight edge,
+        // so it is the fallback rather than the measure.
+        var leavingCurrent = current.TangentAt(vertex) ?? (current.Midpoint - position).Normalized();
+        var leavingCandidate = candidate.TangentAt(vertex) ?? (candidate.Midpoint - position).Normalized();
+
+        return Math.PI - leavingCurrent.AngleTo(leavingCandidate);
     }
 
     private static Dictionary<int, List<int>> BuildVertexIndex(EdgeGraph graph)

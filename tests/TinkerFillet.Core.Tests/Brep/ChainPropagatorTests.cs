@@ -124,6 +124,33 @@ public class ChainPropagatorTests
     }
 
     [Fact]
+    public void ARecoveredRimIsTakenWholeDespiteBeingSplitAtTheSeam()
+    {
+        // Once a cylinder is recovered, its rim comes back as two arcs rather
+        // than one circle, because the surface has a seam where its
+        // parametrisation wraps. A click on either arc has to take both, or
+        // stage 2 would have made the selection worse rather than better.
+        var graph = EdgeGraphFixtures.RimSplitAtSeam();
+
+        var chain = ChainPropagator.Propagate(graph, seedEdgeId: 0, Default);
+
+        Assert.Equal(2, chain.Count);
+        Assert.Contains(0, chain);
+        Assert.Contains(1, chain);
+    }
+
+    [Fact]
+    public void TheSeamItselfIsNeverOfferedAsSomethingToRound()
+    {
+        // Same face on both sides means no dihedral angle and nothing to round.
+        // Treating it as a feature would also make the two arcs look like a
+        // three-way junction and stop the chain at the seam.
+        var graph = EdgeGraphFixtures.RimSplitAtSeam();
+
+        Assert.False(ChainPropagator.IsFeature(graph[2], Default));
+    }
+
+    [Fact]
     public void SeedIsAlwaysPartOfTheChain()
     {
         var graph = EdgeGraphFixtures.Ring(6);

@@ -5,6 +5,7 @@
 @using TinkerFillet.App.Interop
 @using TinkerFillet.Core.Brep
 @using TinkerFillet.Core.History
+@using TinkerFillet.Core.Mesh
 @using TinkerFillet.Core.Stl
 @implements IAsyncDisposable
 
@@ -25,6 +26,13 @@
             <input type="range" min="5" max="90" step="1" value="@_featureAngle"
                    @onchange="OnFeatureAngleChanged" disabled="@(_model is null)" />
             <span>@_featureAngle°</span>
+        </label>
+
+        <label class="slider" title="Ab wie vielen Facetten ein Vieleck als Zylinder gilt. Ein Sechskant und ein grob tessellierter Zylinder sind in der Datei nicht zu unterscheiden - hier entscheidest du.">
+            Rund ab
+            <input type="range" min="4" max="48" step="1" value="@_minimumFacets"
+                   @onchange="OnMinimumFacetsChanged" disabled="@(_soup is null)" />
+            <span>@_minimumFacets Seiten</span>
         </label>
 
         <button @onclick="Export" disabled="@(_model is null || _busy)">STL exportieren</button>
@@ -78,16 +86,53 @@
     private WorkerKernelSession? _kernel;
     private FilletSession? _session;
 
+    private TriangleSoup? _soup;
     private ReconstructionResult? _model;
     private KernelState? _state;
     private IReadOnlyList<int>? _chain;
 
     private double _featureAngle = ChainOptions.Default.FeatureAngleDegrees;
+    private int _minimumFacets = FittingOptions.Default.MinimumFacets;
     private bool _busy;
     private string _busyMessage = "";
     private int _hovered = -1;
 
     private ChainOptions Chain => new(_featureAngle, ChainOptions.Default.KinkAngleDegrees);
+
+    private FittingOptions Fitting => FittingOptions.Default with { MinimumFacets = _minimumFacets };
+
+    private static string Summary(ReconstructionResult model)
+    {
+        var rounded = model.Cylinders.Count == 0
+            ? ""
+            : $", davon {model.Cylinders.Count} als Zylinder erkannt";
+        return $"{model.Mesh.TriangleCount} Dreiecke zu {model.Recipe.Faces.Count} Flächen "
+             + $"zusammengefasst{rounded}.";
+    }
+
+    /// <summary>
+    /// Re-reads the model at the new threshold.
+    ///
+    /// The fillets stay: they are stored by where their edge was, not by which
+    /// number it had, so they survive the solid being rebuilt from scratch.
+    /// </summary>
+    private async Task OnMinimumFacetsChanged(ChangeEventArgs args)
+    {
+        if (_soup is null) return;
+        if (!int.TryParse(args.Value?.ToString(), out var facets)) return;
+
+        _minimumFacets = facets;
+        ClearChain();
+
+        await Busy("Modell wird neu analysiert…", async () =>
+        {
+            _model = Reconstructor.Reconstruct(_soup, Fitting);
+            _notes.RemoveAll(note => note.Kind == "model");
+            foreach (var finding in _model.Diagnostics) AddNote(Severity(finding.Kind), finding.Message);
+            AddNote("info", Summary(_model));
+            await Rebuild();
+        });
+    }
 
     protected override async Task OnAfterRenderAsync(bool first)
     {
@@ -116,11 +161,12 @@
         {
             try
             {
-                var soup = StlReader.Read(buffer.ToArray());
-                _model = Reconstructor.Reconstruct(soup);
+                _soup = StlReader.Read(buffer.ToArray());
+                _model = Reconstructor.Reconstruct(_soup, Fitting);
             }
             catch (StlFormatException error)
             {
+                _soup = null;
                 _model = null;
                 AddNote("error", $"Die Datei ließ sich nicht lesen: {error.Message}");
                 return;
@@ -129,8 +175,7 @@
             foreach (var finding in _model.Diagnostics)
                 AddNote(Severity(finding.Kind), finding.Message);
 
-            AddNote("info",
-                $"{_model.Mesh.TriangleCount} Dreiecke zu {_model.Regions.Regions.Count} Flächen zusammengefasst.");
+            AddNote("info", Summary(_model));
 
             await Rebuild();
             OccBridge.FrameModel();
