@@ -21,17 +21,17 @@ public static class EdgeGraphFixtures
     /// </summary>
     public static EdgeGraph Ring(int segments, double radius = 5, double dihedralDegrees = 90)
     {
-        var positions = new List<Vec3>();
-        for (var i = 0; i < segments; i++)
+        List<Vec3> positions = new();
+        for (int i = 0; i < segments; i++)
         {
-            var angle = 2 * Math.PI * i / segments;
+            double angle = 2 * Math.PI * i / segments;
             positions.Add(new Vec3(radius * Math.Cos(angle), radius * Math.Sin(angle), 0));
         }
 
-        var edges = new List<EdgeInfo>();
-        for (var i = 0; i < segments; i++)
+        List<EdgeInfo> edges = new();
+        for (int i = 0; i < segments; i++)
         {
-            var next = (i + 1) % segments;
+            int next = (i + 1) % segments;
             edges.Add(StraightEdge(i, positions[i], positions[next], [i, next], dihedralDegrees, [0, i + 1]));
         }
 
@@ -44,11 +44,11 @@ public static class EdgeGraphFixtures
     /// </summary>
     public static EdgeGraph OpenRun(int segments, double dihedralDegrees = 90)
     {
-        var positions = new List<Vec3>();
-        for (var i = 0; i <= segments; i++) positions.Add(new Vec3(i, 0, 0));
+        List<Vec3> positions = new();
+        for (int i = 0; i <= segments; i++) positions.Add(new Vec3(i, 0, 0));
 
-        var edges = new List<EdgeInfo>();
-        for (var i = 0; i < segments; i++)
+        List<EdgeInfo> edges = new();
+        for (int i = 0; i < segments; i++)
             edges.Add(StraightEdge(i, positions[i], positions[i + 1], [i, i + 1], dihedralDegrees, [0, 1]));
 
         return new EdgeGraph { Edges = edges, VertexPositions = positions, FaceCount = 2 };
@@ -78,7 +78,7 @@ public static class EdgeGraphFixtures
     /// </summary>
     public static EdgeGraph Corner(double turnDegrees, double dihedralDegrees = 90)
     {
-        var turn = turnDegrees * Math.PI / 180;
+        double turn = turnDegrees * Math.PI / 180;
         List<Vec3> positions =
         [
             new(-1, 0, 0),
@@ -125,7 +125,7 @@ public static class EdgeGraphFixtures
         // The two points where the seam meets the rim.
         List<Vec3> positions = [new(radius, 0, 0), new(-radius, 0, 0), new(radius, 0, -5)];
 
-        var longArc = new EdgeInfo
+        EdgeInfo longArc = new()
         {
             Id = 0,
             Midpoint = new Vec3(0, radius, 0),
@@ -143,7 +143,7 @@ public static class EdgeGraphFixtures
             EndTangents = [new EndTangent(0, new Vec3(0, 1, 0)), new EndTangent(1, new Vec3(0, -1, 0))],
         };
 
-        var shortArc = longArc with
+        EdgeInfo shortArc = longArc with
         {
             Id = 1,
             Midpoint = new Vec3(0, -radius, 0),
@@ -156,7 +156,7 @@ public static class EdgeGraphFixtures
 
         // Runs down the cylinder from the rim. Same face either side, so the
         // worker reports no dihedral angle for it.
-        var seam = new EdgeInfo
+        EdgeInfo seam = new()
         {
             Id = 2,
             Midpoint = new Vec3(radius, 0, -2.5),
@@ -181,7 +181,7 @@ public static class EdgeGraphFixtures
     private static EdgeInfo StraightEdge(
         int id, Vec3 from, Vec3 to, int[] vertices, double dihedralDegrees, int[] faces)
     {
-        var direction = (to - from).Normalized();
+        Vec3 direction = (to - from).Normalized();
         return new EdgeInfo
         {
             Id = id,

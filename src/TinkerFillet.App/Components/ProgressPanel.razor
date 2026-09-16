@@ -1,6 +1,6 @@
 @* Covers the viewport while the model is being worked out.
 
-   It says which step is running rather than guessing at a percentage. The
+   It names the step that is running rather than guessing at a percentage. The
    steps are not equal shares of the work - which one dominates depends on the
    model - so a bar filling smoothly would be a fiction. What the user needs to
    know is that something is happening and roughly how far along it is. *@
@@ -15,26 +15,9 @@
                 @if (Steps > 0)
                 {
                     <span class="working-step">Schritt @Step von @Steps</span>
-                    <div class="working-track">
-                        <div class="working-fill" style="width: @Percent%"></div>
-                    </div>
+                    <progress class="working-bar" max="@Steps" value="@Finished"></progress>
                 }
             </div>
         </div>
     </div>
-}
-
-@code {
-    [Parameter] public bool Visible { get; set; }
-    [Parameter] public string Message { get; set; } = "";
-
-    /// <summary>The step now running, counting from one.</summary>
-    [Parameter] public int Step { get; set; }
-
-    /// <summary>How many steps there are, or zero when the work is one lump.</summary>
-    [Parameter] public int Steps { get; set; }
-
-    // Reports the step as finished only once it is, so the bar never claims
-    // more than has happened.
-    private int Percent => Steps <= 0 ? 0 : (int)Math.Round(100.0 * (Step - 1) / Steps);
 }

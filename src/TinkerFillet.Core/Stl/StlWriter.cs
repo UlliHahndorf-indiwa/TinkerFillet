@@ -21,23 +21,23 @@ public static class StlWriter
 
     public static byte[] WriteBinary(TriangleSoup soup)
     {
-        var bytes = new byte[HeaderBytes + CountBytes + soup.TriangleCount * TriangleBytes];
-        var output = bytes.AsSpan();
+        byte[] bytes = new byte[HeaderBytes + CountBytes + soup.TriangleCount * TriangleBytes];
+        Span<byte> output = bytes.AsSpan();
 
         Encoding.ASCII.GetBytes(Header, output[..HeaderBytes]);
         BinaryPrimitives.WriteUInt32LittleEndian(output.Slice(HeaderBytes, CountBytes), (uint)soup.TriangleCount);
 
-        var offset = HeaderBytes + CountBytes;
-        for (var index = 0; index < soup.TriangleCount; index++)
+        int offset = HeaderBytes + CountBytes;
+        for (int index = 0; index < soup.TriangleCount; index++)
         {
-            var triangle = soup.Triangle(index);
-            var normal = FacetNormal(triangle);
+            ReadOnlySpan<double> triangle = soup.Triangle(index);
+            (double X, double Y, double Z) normal = FacetNormal(triangle);
 
             BinaryPrimitives.WriteSingleLittleEndian(output.Slice(offset, 4), (float)normal.X);
             BinaryPrimitives.WriteSingleLittleEndian(output.Slice(offset + 4, 4), (float)normal.Y);
             BinaryPrimitives.WriteSingleLittleEndian(output.Slice(offset + 8, 4), (float)normal.Z);
 
-            for (var i = 0; i < 9; i++)
+            for (int i = 0; i < 9; i++)
                 BinaryPrimitives.WriteSingleLittleEndian(output.Slice(offset + 12 + i * 4, 4), (float)triangle[i]);
 
             // Attribute byte count. Zero; the field has no agreed meaning.
@@ -56,18 +56,18 @@ public static class StlWriter
     /// </summary>
     private static (double X, double Y, double Z) FacetNormal(ReadOnlySpan<double> t)
     {
-        var ax = t[3] - t[0];
-        var ay = t[4] - t[1];
-        var az = t[5] - t[2];
-        var bx = t[6] - t[0];
-        var by = t[7] - t[1];
-        var bz = t[8] - t[2];
+        double ax = t[3] - t[0];
+        double ay = t[4] - t[1];
+        double az = t[5] - t[2];
+        double bx = t[6] - t[0];
+        double by = t[7] - t[1];
+        double bz = t[8] - t[2];
 
-        var nx = ay * bz - az * by;
-        var ny = az * bx - ax * bz;
-        var nz = ax * by - ay * bx;
+        double nx = ay * bz - az * by;
+        double ny = az * bx - ax * bz;
+        double nz = ax * by - ay * bx;
 
-        var length = Math.Sqrt(nx * nx + ny * ny + nz * nz);
+        double length = Math.Sqrt(nx * nx + ny * ny + nz * nz);
 
         // A zero-area triangle has no direction. Normalising would produce NaN,
         // which propagates into the file and breaks downstream tools, so such a

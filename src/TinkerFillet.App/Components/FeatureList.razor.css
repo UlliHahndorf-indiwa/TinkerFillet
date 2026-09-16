@@ -1,0 +1,71 @@
+.panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+}
+
+.panel-actions button {
+    border: 1px solid var(--line);
+    background: var(--paper);
+    border-radius: 0.3rem;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0.15rem 0.45rem;
+}
+
+.panel-actions button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.features {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.features li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.3rem;
+    border-bottom: 1px solid var(--line);
+}
+
+/* A step that could not be applied stays in the list rather than vanishing,
+   so the work behind it is not lost. */
+.features li.failed {
+    background: #fdf3e6;
+}
+
+.features .number {
+    color: var(--muted);
+    min-width: 1.2rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.features input {
+    width: 4.5rem;
+    font: inherit;
+    padding: 0.15rem 0.3rem;
+    border: 1px solid var(--line);
+    border-radius: 0.25rem;
+}
+
+.features .badge {
+    font-size: 0.7rem;
+    color: var(--warn);
+    cursor: help;
+}
+
+.features .remove {
+    margin-left: auto;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 0.9rem;
+}

@@ -1,0 +1,70 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+trim_trailing_whitespace = true
+
+[*.{cs,razor}]
+indent_size = 4
+
+[*.{js,mjs,json,css,html,yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# See code-styleguide.md. The rules below are the ones that document decisions
+# rather than taste, so a tool can hold them rather than a reviewer.
+
+# Explicit types everywhere. Anonymous types are the one case the language does
+# not allow one, and the codebase does not use any.
+csharp_style_var_for_built_in_types = false:warning
+csharp_style_var_when_type_is_apparent = false:warning
+csharp_style_var_elsewhere = false:warning
+dotnet_diagnostic.IDE0007.severity = warning
+dotnet_diagnostic.IDE0008.severity = warning
+
+# The declared type already says what is being built, so the constructor call
+# need not repeat it. Without this, banning var turns
+#   var b = new Dictionary<(long, long, long), List<int>>();
+# into the same generic argument list written out twice.
+csharp_style_implicit_object_creation_when_type_is_apparent = true:warning
+dotnet_diagnostic.IDE0090.severity = warning
+
+# An unused using is dead weight; the split into one type per file left plenty.
+dotnet_diagnostic.IDE0005.severity = warning
+
+# One namespace declaration, at the top, without a block around the file.
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_diagnostic.IDE0161.severity = warning
+
+# Private fields carry an underscore; everything else is PascalCase.
+dotnet_naming_rule.private_fields_with_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_with_underscore.style = underscore_camel_case
+dotnet_naming_rule.private_fields_with_underscore.severity = warning
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_symbols.private_fields.required_modifiers =
+
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+dotnet_naming_style.underscore_camel_case.capitalization = camel_case
+
+# A constant is not a field in this sense, so it keeps PascalCase.
+dotnet_naming_rule.constants_are_pascal_case.symbols = constants
+dotnet_naming_rule.constants_are_pascal_case.style = pascal_case
+dotnet_naming_rule.constants_are_pascal_case.severity = warning
+
+dotnet_naming_symbols.constants.applicable_kinds = field
+dotnet_naming_symbols.constants.applicable_accessibilities = *
+dotnet_naming_symbols.constants.required_modifiers = const
+
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+# Sorted usings, framework first, outside the namespace.
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:warning

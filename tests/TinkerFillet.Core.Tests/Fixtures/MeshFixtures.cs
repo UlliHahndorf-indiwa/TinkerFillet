@@ -23,7 +23,7 @@ public static class MeshFixtures
     /// </summary>
     public static TriangleSoup Cube(double size = 10, int subdivisions = 4)
     {
-        var triangles = new List<double>();
+        List<double> triangles = new();
 
         // Origin plus two edge vectors per face, ordered so that u x v points
         // out of the solid.
@@ -37,7 +37,7 @@ public static class MeshFixtures
             (new Vec3(size, 0, 0), new Vec3(0, size, 0), new Vec3(0, 0, size)), // +X
         ];
 
-        foreach (var (origin, u, v) in faces)
+        foreach ((Vec3 origin, Vec3 u, Vec3 v) in faces)
             AppendGrid(triangles, origin, u, v, subdivisions);
 
         return new TriangleSoup([.. triangles]);
@@ -50,7 +50,7 @@ public static class MeshFixtures
     public static TriangleSoup PlateWithSquareHole(
         double width = 20, double depth = 20, double thickness = 4, double hole = 6)
     {
-        var triangles = new List<double>();
+        List<double> triangles = new();
 
         // Everything is cut from one 3x3 grid, including the outer walls. Any
         // face built independently of it would meet its neighbours in the
@@ -60,9 +60,9 @@ public static class MeshFixtures
         double[] xs = [0, (width - hole) / 2, (width + hole) / 2, width];
         double[] ys = [0, (depth - hole) / 2, (depth + hole) / 2, depth];
 
-        for (var i = 0; i < 3; i++)
+        for (int i = 0; i < 3; i++)
         {
-            for (var j = 0; j < 3; j++)
+            for (int j = 0; j < 3; j++)
             {
                 if (i == 1 && j == 1) continue; // the hole
 
@@ -76,7 +76,7 @@ public static class MeshFixtures
         }
 
         // Outer walls, split at the same grid lines as the faces they meet.
-        for (var i = 0; i < 3; i++)
+        for (int i = 0; i < 3; i++)
         {
             AppendQuad(triangles,
                 new Vec3(xs[i], 0, 0), new Vec3(xs[i + 1], 0, 0),
@@ -86,7 +86,7 @@ public static class MeshFixtures
                 new Vec3(xs[i], depth, thickness), new Vec3(xs[i + 1], depth, thickness)); // +Y
         }
 
-        for (var j = 0; j < 3; j++)
+        for (int j = 0; j < 3; j++)
         {
             AppendQuad(triangles,
                 new Vec3(width, ys[j], 0), new Vec3(width, ys[j + 1], 0),
@@ -125,23 +125,23 @@ public static class MeshFixtures
     {
         if (sides < 3) throw new ArgumentOutOfRangeException(nameof(sides));
 
-        var triangles = new List<double>();
-        var ring = new Vec3[sides];
-        for (var i = 0; i < sides; i++)
+        List<double> triangles = new();
+        Vec3[] ring = new Vec3[sides];
+        for (int i = 0; i < sides; i++)
         {
-            var angle = 2 * Math.PI * i / sides;
+            double angle = 2 * Math.PI * i / sides;
             ring[i] = new Vec3(radius * Math.Cos(angle), radius * Math.Sin(angle), 0);
         }
 
-        var bottomCentre = new Vec3(0, 0, 0);
-        var topCentre = new Vec3(0, 0, height);
+        Vec3 bottomCentre = new(0, 0, 0);
+        Vec3 topCentre = new(0, 0, height);
 
-        for (var i = 0; i < sides; i++)
+        for (int i = 0; i < sides; i++)
         {
-            var a = ring[i];
-            var b = ring[(i + 1) % sides];
-            var aTop = a + new Vec3(0, 0, height);
-            var bTop = b + new Vec3(0, 0, height);
+            Vec3 a = ring[i];
+            Vec3 b = ring[(i + 1) % sides];
+            Vec3 aTop = a + new Vec3(0, 0, height);
+            Vec3 bTop = b + new Vec3(0, 0, height);
 
             AppendQuad(triangles, a, b, bTop, aTop);                       // side, outward
             AppendTriangle(triangles, bottomCentre, b, a);                 // bottom, -Z
@@ -167,17 +167,17 @@ public static class MeshFixtures
     public static TriangleSoup Washer(
         int sides = 20, double outerRadius = 20, double holeRadius = 8, double thickness = 6)
     {
-        var triangles = new List<double>();
+        List<double> triangles = new();
 
         Vec3 On(double radius, int index, double z)
         {
-            var angle = 2 * Math.PI * index / sides;
+            double angle = 2 * Math.PI * index / sides;
             return new Vec3(radius * Math.Cos(angle), radius * Math.Sin(angle), z);
         }
 
-        for (var i = 0; i < sides; i++)
+        for (int i = 0; i < sides; i++)
         {
-            var next = (i + 1) % sides;
+            int next = (i + 1) % sides;
 
             // Top and bottom annulus.
             AppendQuad(triangles,
@@ -215,17 +215,17 @@ public static class MeshFixtures
     public static TriangleSoup Cone(
         int sides = 24, double bottomRadius = 10, double topRadius = 0, double height = 12)
     {
-        var triangles = new List<double>();
+        List<double> triangles = new();
 
         Vec3 On(double radius, int index, double z)
         {
-            var angle = 2 * Math.PI * index / sides;
+            double angle = 2 * Math.PI * index / sides;
             return new Vec3(radius * Math.Cos(angle), radius * Math.Sin(angle), z);
         }
 
-        for (var i = 0; i < sides; i++)
+        for (int i = 0; i < sides; i++)
         {
-            var next = (i + 1) % sides;
+            int next = (i + 1) % sides;
 
             if (topRadius <= 0)
             {
@@ -249,7 +249,7 @@ public static class MeshFixtures
     /// <summary>A single triangle: the simplest mesh with an open boundary.</summary>
     public static TriangleSoup SingleTriangle()
     {
-        var triangles = new List<double>();
+        List<double> triangles = new();
         AppendTriangle(triangles, new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0));
         return new TriangleSoup([.. triangles]);
     }
@@ -260,9 +260,9 @@ public static class MeshFixtures
     /// </summary>
     public static TriangleSoup NonManifoldEdge()
     {
-        var triangles = new List<double>();
-        var a = new Vec3(0, 0, 0);
-        var b = new Vec3(1, 0, 0);
+        List<double> triangles = new();
+        Vec3 a = new(0, 0, 0);
+        Vec3 b = new(1, 0, 0);
         AppendTriangle(triangles, a, b, new Vec3(0, 1, 0));
         AppendTriangle(triangles, a, b, new Vec3(0, 0, 1));
         AppendTriangle(triangles, a, b, new Vec3(0, -1, 0));
@@ -271,14 +271,14 @@ public static class MeshFixtures
 
     private static void AppendGrid(List<double> target, Vec3 origin, Vec3 u, Vec3 v, int subdivisions)
     {
-        for (var i = 0; i < subdivisions; i++)
+        for (int i = 0; i < subdivisions; i++)
         {
-            for (var j = 0; j < subdivisions; j++)
+            for (int j = 0; j < subdivisions; j++)
             {
-                var u0 = (double)i / subdivisions;
-                var u1 = (double)(i + 1) / subdivisions;
-                var v0 = (double)j / subdivisions;
-                var v1 = (double)(j + 1) / subdivisions;
+                double u0 = (double)i / subdivisions;
+                double u1 = (double)(i + 1) / subdivisions;
+                double v0 = (double)j / subdivisions;
+                double v1 = (double)(j + 1) / subdivisions;
 
                 AppendQuad(target,
                     origin + u * u0 + v * v0,

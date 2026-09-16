@@ -11,9 +11,9 @@ public static class LoopExtractor
     public static IReadOnlyList<RegionLoops> Extract(
         MeshTopology topology, RegionSet regions, LoopOptions options)
     {
-        var result = new List<RegionLoops>(regions.Regions.Count);
+        List<RegionLoops> result = new(regions.Regions.Count);
 
-        for (var index = 0; index < regions.Regions.Count; index++)
+        for (int index = 0; index < regions.Regions.Count; index++)
             result.Add(ExtractRegion(topology, regions, index, options));
 
         return result;
@@ -22,20 +22,20 @@ public static class LoopExtractor
     private static RegionLoops ExtractRegion(
         MeshTopology topology, RegionSet regions, int regionIndex, LoopOptions options)
     {
-        var region = regions.Regions[regionIndex];
+        PlanarRegion region = regions.Regions[regionIndex];
 
         // A half-edge is on the region's boundary when its partner belongs to a
         // different region - or when it has no partner at all, which is where
         // an open or non-manifold mesh shows up as an outline that will not
         // close.
-        var successor = new Dictionary<int, int>();
-        foreach (var triangle in region.Triangles)
+        Dictionary<int, int> successor = new();
+        foreach (int triangle in region.Triangles)
         {
-            for (var corner = 0; corner < 3; corner++)
+            for (int corner = 0; corner < 3; corner++)
             {
-                var halfEdge = triangle * 3 + corner;
-                var opposite = topology.Opposite[halfEdge];
-                var neighbourRegion = opposite == MeshTopology.NoOpposite
+                int halfEdge = triangle * 3 + corner;
+                int opposite = topology.Opposite[halfEdge];
+                int neighbourRegion = opposite == MeshTopology.NoOpposite
                     ? -1
                     : regions.RegionOfTriangle[opposite / 3];
 
@@ -44,19 +44,19 @@ public static class LoopExtractor
             }
         }
 
-        var loops = new List<Loop>();
-        var visited = new HashSet<int>();
+        List<Loop> loops = new();
+        HashSet<int> visited = new();
 
-        foreach (var start in successor.Keys.Order())
+        foreach (int start in successor.Keys.Order())
         {
             if (!visited.Add(start)) continue;
 
-            var vertices = new List<int>();
-            var current = start;
+            List<int> vertices = new();
+            int current = start;
             while (true)
             {
                 vertices.Add(current);
-                if (!successor.TryGetValue(current, out var halfEdge))
+                if (!successor.TryGetValue(current, out int halfEdge))
                     throw new InvalidOperationException(
                         $"the outline of region {regionIndex} does not close at vertex {current}");
 
@@ -68,7 +68,7 @@ public static class LoopExtractor
                         $"the outline of region {regionIndex} revisits vertex {current}");
             }
 
-            var simplified = Simplify(topology.Mesh, vertices, options.CollinearAngleRadians);
+            List<int> simplified = Simplify(topology.Mesh, vertices, options.CollinearAngleRadians);
             loops.Add(new Loop(simplified, SignedArea(topology.Mesh, simplified, region.Normal)));
         }
 
@@ -78,11 +78,11 @@ public static class LoopExtractor
         // The outer boundary is the one enclosing the most area. Holes wind the
         // other way and therefore come out negative, so comparing the absolute
         // value is what identifies the outline.
-        var outerIndex = 0;
-        for (var i = 1; i < loops.Count; i++)
+        int outerIndex = 0;
+        for (int i = 1; i < loops.Count; i++)
             if (Math.Abs(loops[i].SignedArea) > Math.Abs(loops[outerIndex].SignedArea)) outerIndex = i;
 
-        var outer = loops[outerIndex];
+        Loop outer = loops[outerIndex];
         loops.RemoveAt(outerIndex);
 
         return new RegionLoops(regionIndex, outer, loops);
@@ -100,15 +100,15 @@ public static class LoopExtractor
     {
         if (collinearAngle <= 0 || vertices.Count <= 3) return vertices;
 
-        var kept = new List<int>(vertices.Count);
-        for (var i = 0; i < vertices.Count; i++)
+        List<int> kept = new(vertices.Count);
+        for (int i = 0; i < vertices.Count; i++)
         {
-            var previous = mesh.Vertex(vertices[(i - 1 + vertices.Count) % vertices.Count]);
-            var current = mesh.Vertex(vertices[i]);
-            var next = mesh.Vertex(vertices[(i + 1) % vertices.Count]);
+            Vec3 previous = mesh.Vertex(vertices[(i - 1 + vertices.Count) % vertices.Count]);
+            Vec3 current = mesh.Vertex(vertices[i]);
+            Vec3 next = mesh.Vertex(vertices[(i + 1) % vertices.Count]);
 
-            var incoming = current - previous;
-            var outgoing = next - current;
+            Vec3 incoming = current - previous;
+            Vec3 outgoing = next - current;
             if (incoming.AngleTo(outgoing) > collinearAngle) kept.Add(vertices[i]);
         }
 
@@ -127,13 +127,13 @@ public static class LoopExtractor
         // the face normal. Projecting is what makes the sign meaningful: a loop
         // wound counter-clockwise as seen from outside the solid comes out
         // positive, a hole negative.
-        var origin = mesh.Vertex(vertices[0]);
-        var total = Vec3.Zero;
+        Vec3 origin = mesh.Vertex(vertices[0]);
+        Vec3 total = Vec3.Zero;
 
-        for (var i = 1; i < vertices.Count - 1; i++)
+        for (int i = 1; i < vertices.Count - 1; i++)
         {
-            var a = mesh.Vertex(vertices[i]) - origin;
-            var b = mesh.Vertex(vertices[i + 1]) - origin;
+            Vec3 a = mesh.Vertex(vertices[i]) - origin;
+            Vec3 b = mesh.Vertex(vertices[i + 1]) - origin;
             total += a.Cross(b);
         }
 

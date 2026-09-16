@@ -32,10 +32,10 @@ public sealed class TriangleSoup
         if (indices.Count % 3 != 0)
             throw new ArgumentException("expected 3 indices per triangle", nameof(indices));
 
-        var positions = new double[indices.Count * 3];
-        for (var corner = 0; corner < indices.Count; corner++)
+        double[] positions = new double[indices.Count * 3];
+        for (int corner = 0; corner < indices.Count; corner++)
         {
-            var vertex = indices[corner];
+            int vertex = indices[corner];
             positions[corner * 3] = vertexCoordinates[vertex * 3];
             positions[corner * 3 + 1] = vertexCoordinates[vertex * 3 + 1];
             positions[corner * 3 + 2] = vertexCoordinates[vertex * 3 + 2];

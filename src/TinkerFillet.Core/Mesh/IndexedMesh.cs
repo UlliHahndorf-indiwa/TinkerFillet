@@ -47,7 +47,7 @@ public sealed class IndexedMesh
     /// </summary>
     public Vec3 TriangleNormal(int triangle)
     {
-        var a = CornerPosition(triangle, 0);
+        Vec3 a = CornerPosition(triangle, 0);
         return (CornerPosition(triangle, 1) - a).Cross(CornerPosition(triangle, 2) - a);
     }
 
@@ -58,11 +58,11 @@ public sealed class IndexedMesh
     {
         if (VertexCount == 0) return (Vec3.Zero, Vec3.Zero);
 
-        var min = Vertex(0);
-        var max = min;
-        for (var i = 1; i < VertexCount; i++)
+        Vec3 min = Vertex(0);
+        Vec3 max = min;
+        for (int i = 1; i < VertexCount; i++)
         {
-            var v = Vertex(i);
+            Vec3 v = Vertex(i);
             min = new Vec3(Math.Min(min.X, v.X), Math.Min(min.Y, v.Y), Math.Min(min.Z, v.Z));
             max = new Vec3(Math.Max(max.X, v.X), Math.Max(max.Y, v.Y), Math.Max(max.Z, v.Z));
         }
@@ -76,7 +76,7 @@ public sealed class IndexedMesh
     /// </summary>
     public double BoundingBoxDiagonal()
     {
-        var (min, max) = BoundingBox();
+        (Vec3 min, Vec3 max) = BoundingBox();
         return (max - min).Length;
     }
 }

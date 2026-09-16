@@ -233,7 +233,7 @@ src/
   TinkerFillet.App/            Blazor WebAssembly standalone, PWA
     Program.cs
     Pages/Editor.razor
-    Components/FeatureList.razor, RadiusDialog.razor, Toolbar.razor
+    Components/FeatureList, RadiusDialog, ProgressPanel (je .razor/.razor.cs/.razor.css)
     Interop/OccBridge.cs       [JSImport] auf occ-bridge.js
     Interop/ViewportBridge.cs  [JSImport] auf viewport.js
     wwwroot/
@@ -247,6 +247,26 @@ tests/
   TinkerFillet.Core.Tests/     xUnit, läuft auf Desktop-.NET
   occ/                         node --test, testet occ-worker.js direkt
 ```
+
+### Konventionen
+
+`code-styleguide.md` ist verbindlich. Die wichtigsten Punkte, weil sie das
+Layout der Dateien bestimmen:
+
+- **Kein `@code`-Block.** Jede Komponente ist `Name.razor` (nur Markup) plus
+  `Name.razor.cs` (partielle Klasse) plus `Name.razor.css`.
+- **Kein `var`.** Explizite Typen überall; `new()` auf der rechten Seite, damit
+  der Typname nicht doppelt dasteht.
+- **Eine Klasse pro Datei**, Dateiname gleich Klassenname.
+- **CSS beim Bauteil**, nicht in `app.css`. Dort steht nur, was wirklich
+  mehrere Komponenten teilen: die Farbvariablen, `.hint`, und die Blazor-
+  eigene Ladeanzeige, die in `index.html` steht und zu keiner Komponente
+  gehört.
+- Kein Inline-CSS. Der Fortschrittsbalken ist deshalb ein `<progress>`: sein
+  Wert ist Inhalt, kein Stil.
+
+Durchgesetzt wird das vom Build (`EnforceCodeStyleInBuild`) gegen die Regeln in
+`.editorconfig`, nicht von der Durchsicht.
 
 ### Interop-Schnitt
 

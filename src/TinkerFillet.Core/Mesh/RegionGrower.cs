@@ -23,20 +23,20 @@ public static class RegionGrower
 
     public static RegionSet Grow(MeshTopology topology, RegionOptions options)
     {
-        var mesh = topology.Mesh;
-        var regionOfTriangle = new int[mesh.TriangleCount];
+        IndexedMesh mesh = topology.Mesh;
+        int[] regionOfTriangle = new int[mesh.TriangleCount];
         Array.Fill(regionOfTriangle, -1);
 
-        var regions = new List<PlanarRegion>();
-        var queue = new Queue<int>();
+        List<PlanarRegion> regions = new();
+        Queue<int> queue = new();
 
-        for (var seed = 0; seed < mesh.TriangleCount; seed++)
+        for (int seed = 0; seed < mesh.TriangleCount; seed++)
         {
             if (regionOfTriangle[seed] >= 0) continue;
 
-            var regionIndex = regions.Count;
-            var members = new List<int>();
-            var plane = new RunningPlane(mesh, seed);
+            int regionIndex = regions.Count;
+            List<int> members = new();
+            RunningPlane plane = new(mesh, seed);
 
             regionOfTriangle[seed] = regionIndex;
             members.Add(seed);
@@ -45,17 +45,17 @@ public static class RegionGrower
 
             while (queue.Count > 0)
             {
-                var triangle = queue.Dequeue();
+                int triangle = queue.Dequeue();
 
-                for (var corner = 0; corner < 3; corner++)
+                for (int corner = 0; corner < 3; corner++)
                 {
-                    var opposite = topology.Opposite[triangle * 3 + corner];
+                    int opposite = topology.Opposite[triangle * 3 + corner];
 
                     // An unpaired half-edge is a hole or a non-manifold
                     // junction. A face cannot be grown across either.
                     if (opposite == MeshTopology.NoOpposite) continue;
 
-                    var neighbour = opposite / 3;
+                    int neighbour = opposite / 3;
                     if (regionOfTriangle[neighbour] >= 0) continue;
                     if (!plane.Accepts(neighbour, options)) continue;
 
@@ -100,7 +100,7 @@ public static class RegionGrower
 
         public bool Accepts(int triangle, RegionOptions options)
         {
-            var normal = _mesh.TriangleNormal(triangle);
+            Vec3 normal = _mesh.TriangleNormal(triangle);
 
             // A zero-area triangle has no direction to compare. Let it join
             // whichever region reaches it; it contributes nothing either way,
@@ -120,9 +120,9 @@ public static class RegionGrower
             // allowance would reject large triangles at angles it accepts and
             // would therefore split exactly the big flat faces this stage
             // exists to recover.
-            var centroid = _mesh.TriangleCentroid(triangle);
-            var extent = Extent(triangle, centroid);
-            var allowance = options.PlaneDistance + extent * Math.Sin(options.PlaneAngleRadians);
+            Vec3 centroid = _mesh.TriangleCentroid(triangle);
+            double extent = Extent(triangle, centroid);
+            double allowance = options.PlaneDistance + extent * Math.Sin(options.PlaneAngleRadians);
 
             return Math.Abs(centroid.Dot(Normal) - Offset) <= allowance;
         }
@@ -130,8 +130,8 @@ public static class RegionGrower
         /// <summary>Distance from the centroid to the farthest of the triangle's corners.</summary>
         private double Extent(int triangle, Vec3 centroid)
         {
-            var farthest = 0.0;
-            for (var corner = 0; corner < 3; corner++)
+            double farthest = 0.0;
+            for (int corner = 0; corner < 3; corner++)
                 farthest = Math.Max(farthest, (_mesh.CornerPosition(triangle, corner) - centroid).Length);
             return farthest;
         }
@@ -140,8 +140,8 @@ public static class RegionGrower
         {
             // The unnormalised normal's length is twice the triangle's area, so
             // accumulating it directly gives the area weighting for free.
-            var normal = _mesh.TriangleNormal(triangle);
-            var area = normal.Length / 2;
+            Vec3 normal = _mesh.TriangleNormal(triangle);
+            double area = normal.Length / 2;
 
             _weightedNormal += normal;
             _weightedCentroid += _mesh.TriangleCentroid(triangle) * area;
@@ -154,7 +154,7 @@ public static class RegionGrower
         {
             _sinceRefit = 0;
 
-            var normal = _weightedNormal.Normalized();
+            Vec3 normal = _weightedNormal.Normalized();
             if (normal == Vec3.Zero) return; // nothing but degenerate triangles so far
 
             Normal = normal;

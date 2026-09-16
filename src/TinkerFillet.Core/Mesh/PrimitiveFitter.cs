@@ -3,50 +3,6 @@ using TinkerFillet.Core.Geometry;
 namespace TinkerFillet.Core.Mesh;
 
 /// <summary>
-/// A run of flat strips that together describe one cylinder.
-/// </summary>
-/// <param name="Convex">
-/// True where the material is inside the cylinder - a post. False for a bore,
-/// where the material surrounds it.
-/// </param>
-public sealed record CylinderFit(
-    IReadOnlyList<int> RegionIndices,
-    Vec3 BasePoint,
-    Vec3 Axis,
-    double Radius,
-    double Height,
-    bool Convex);
-
-/// <param name="MinimumFacets">
-/// Below this many strips, a fan is taken at face value.
-///
-/// A hexagonal prism and a cylinder approximated by six facets are the same
-/// geometry - the file cannot say which was meant. The threshold is where we
-/// stop guessing, which is why it is a setting the user can see rather than a
-/// constant.
-/// </param>
-/// <param name="RadiusTolerance">Largest deviation from the fitted radius, as a fraction of it.</param>
-/// <param name="AxisAngleTolerance">How far strip junctions may tilt and still count as parallel.</param>
-/// <param name="BoundaryFeatureDegrees">
-/// How sharply a recovered cone must end.
-///
-/// Any surface of revolution tessellated as rings of quads decomposes into
-/// conical frusta - a cone through two circles passes exactly through both, so
-/// the residuals say nothing. A sphere would come back as a dozen cones. What
-/// separates a real cone is that it ends at an edge: its base meets a cap at
-/// well over a hundred degrees, while one band of a sphere continues into the
-/// next at fifteen.
-/// </param>
-public sealed record FittingOptions(
-    int MinimumFacets = 12,
-    double RadiusTolerance = 0.005,
-    double AxisAngleTolerance = 1.0 * Math.PI / 180,
-    double BoundaryFeatureDegrees = 30)
-{
-    public static FittingOptions Default { get; } = new();
-}
-
-/// <summary>
 /// Recovers the cylinders a CAD tool drew before it tessellated them away.
 ///
 /// Without this, a round hole is not a circle but twenty flat strips meeting a
@@ -59,28 +15,28 @@ public static class PrimitiveFitter
     public static IReadOnlyList<CylinderFit> FindCylinders(
         MeshTopology topology, RegionSet regions, FittingOptions options)
     {
-        var junctions = FindJunctions(topology, regions);
-        var used = new HashSet<int>();
-        var found = new List<CylinderFit>();
+        Dictionary<int, Dictionary<int, Junction>> junctions = FindJunctions(topology, regions);
+        HashSet<int> used = new();
+        List<CylinderFit> found = new();
 
-        for (var seed = 0; seed < regions.Regions.Count; seed++)
+        for (int seed = 0; seed < regions.Regions.Count; seed++)
         {
-            if (used.Contains(seed) || !junctions.TryGetValue(seed, out var atSeed)) continue;
+            if (used.Contains(seed) || !junctions.TryGetValue(seed, out Dictionary<int, Junction>? atSeed)) continue;
 
             // Each junction at the seed proposes an axis direction. A strip
             // usually has several - the two along the fan and the ones at the
             // ends - so each is tried rather than guessed at.
-            foreach (var proposal in atSeed.Values)
+            foreach (Junction proposal in atSeed.Values)
             {
-                var component = Grow(seed, proposal.Direction, junctions, used, options);
+                List<int> component = Grow(seed, proposal.Direction, junctions, used, options);
                 if (component.Count < options.MinimumFacets) continue;
                 if (!IsClosedRing(component, proposal.Direction, junctions, options)) continue;
 
-                var fit = TryFit(topology.Mesh, regions, component, junctions, options);
+                CylinderFit? fit = TryFit(topology.Mesh, regions, component, junctions, options);
                 if (fit is null) continue;
 
                 found.Add(fit);
-                foreach (var region in component) used.Add(region);
+                foreach (int region in component) used.Add(region);
                 break;
             }
         }
@@ -98,32 +54,32 @@ public static class PrimitiveFitter
     private static Dictionary<int, Dictionary<int, Junction>> FindJunctions(
         MeshTopology topology, RegionSet regions)
     {
-        var mesh = topology.Mesh;
-        var shared = new Dictionary<(int A, int B), List<Vec3>>();
-        var somePoint = new Dictionary<(int A, int B), Vec3>();
+        IndexedMesh mesh = topology.Mesh;
+        Dictionary<(int A, int B), List<Vec3>> shared = new();
+        Dictionary<(int A, int B), Vec3> somePoint = new();
 
-        for (var halfEdge = 0; halfEdge < topology.HalfEdgeCount; halfEdge++)
+        for (int halfEdge = 0; halfEdge < topology.HalfEdgeCount; halfEdge++)
         {
-            var opposite = topology.Opposite[halfEdge];
+            int opposite = topology.Opposite[halfEdge];
             if (opposite == MeshTopology.NoOpposite) continue;
 
-            var here = regions.RegionOfTriangle[halfEdge / 3];
-            var there = regions.RegionOfTriangle[opposite / 3];
+            int here = regions.RegionOfTriangle[halfEdge / 3];
+            int there = regions.RegionOfTriangle[opposite / 3];
             if (here >= there) continue; // record each pair once
 
-            var direction = (mesh.Vertex(topology.To(halfEdge)) - mesh.Vertex(topology.From(halfEdge))).Normalized();
+            Vec3 direction = (mesh.Vertex(topology.To(halfEdge)) - mesh.Vertex(topology.From(halfEdge))).Normalized();
             if (direction == Vec3.Zero) continue;
 
-            if (!shared.TryGetValue((here, there), out var list)) shared[(here, there)] = list = [];
+            if (!shared.TryGetValue((here, there), out List<Vec3>? list)) shared[(here, there)] = list = [];
             list.Add(direction);
             somePoint[(here, there)] = mesh.Vertex(topology.From(halfEdge));
         }
 
-        var result = new Dictionary<int, Dictionary<int, Junction>>();
-        foreach (var ((a, b), directions) in shared)
+        Dictionary<int, Dictionary<int, Junction>> result = new();
+        foreach (((int a, int b), List<Vec3>? directions) in shared)
         {
-            var reference = directions[0];
-            var straight = directions.All(direction => AreParallel(direction, reference, 1e-6));
+            Vec3 reference = directions[0];
+            bool straight = directions.All(direction => AreParallel(direction, reference, 1e-6));
             if (!straight) continue;
 
             Add(a, b, reference, somePoint[(a, b)]);
@@ -134,7 +90,7 @@ public static class PrimitiveFitter
 
         void Add(int from, int to, Vec3 direction, Vec3 point)
         {
-            if (!result.TryGetValue(from, out var map)) result[from] = map = [];
+            if (!result.TryGetValue(from, out Dictionary<int, Junction>? map)) result[from] = map = [];
             map[to] = new Junction(to, direction, point);
         }
     }
@@ -147,17 +103,17 @@ public static class PrimitiveFitter
         HashSet<int> used,
         FittingOptions options)
     {
-        var component = new List<int>();
-        var visited = new HashSet<int> { seed };
-        var queue = new Queue<int>([seed]);
+        List<int> component = new();
+        HashSet<int> visited = new() { seed };
+        Queue<int> queue = new([seed]);
 
         while (queue.Count > 0)
         {
-            var region = queue.Dequeue();
+            int region = queue.Dequeue();
             component.Add(region);
 
-            if (!junctions.TryGetValue(region, out var neighbours)) continue;
-            foreach (var junction in neighbours.Values)
+            if (!junctions.TryGetValue(region, out Dictionary<int, Junction>? neighbours)) continue;
+            foreach (Junction junction in neighbours.Values)
             {
                 if (used.Contains(junction.Other) || visited.Contains(junction.Other)) continue;
                 if (!AreParallel(junction.Direction, axis, options.AxisAngleTolerance)) continue;
@@ -182,11 +138,11 @@ public static class PrimitiveFitter
         Dictionary<int, Dictionary<int, Junction>> junctions,
         FittingOptions options)
     {
-        var inComponent = component.ToHashSet();
+        HashSet<int> inComponent = component.ToHashSet();
 
-        foreach (var region in component)
+        foreach (int region in component)
         {
-            var neighbours = junctions[region].Values.Count(junction =>
+            int neighbours = junctions[region].Values.Count(junction =>
                 inComponent.Contains(junction.Other)
                 && AreParallel(junction.Direction, axis, options.AxisAngleTolerance));
 
@@ -203,35 +159,35 @@ public static class PrimitiveFitter
         Dictionary<int, Dictionary<int, Junction>> junctions,
         FittingOptions options)
     {
-        var axis = AverageAxis(component, junctions, options);
+        Vec3 axis = AverageAxis(component, junctions, options);
         if (axis == Vec3.Zero) return null;
 
-        var vertices = DistinctVertices(mesh, regions, component);
+        List<Vec3> vertices = DistinctVertices(mesh, regions, component);
         if (vertices.Count < 3) return null;
 
-        var (u, v) = BasisPerpendicularTo(axis);
-        var origin = Average(vertices);
+        (Vec3 u, Vec3 v) = BasisPerpendicularTo(axis);
+        Vec3 origin = Average(vertices);
 
-        var flat = vertices
+        List<(double, double)> flat = vertices
             .Select(vertex => ((vertex - origin).Dot(u), (vertex - origin).Dot(v)))
             .ToList();
 
-        var circle = FitCircle(flat);
+        (double X, double Y, double Radius)? circle = FitCircle(flat);
         if (circle is not var (cu, cv, radius) || radius <= 0) return null;
 
         // The vertices of a tessellated cylinder sit on the true surface, so
         // the circle through them is the radius the designer drew. Fitting the
         // facet planes instead would give the inscribed radius and shrink every
         // hole by a percent or more.
-        foreach (var (x, y) in flat)
+        foreach ((double x, double y) in flat)
         {
-            var deviation = Math.Abs(Math.Sqrt((x - cu) * (x - cu) + (y - cv) * (y - cv)) - radius);
+            double deviation = Math.Abs(Math.Sqrt((x - cu) * (x - cu) + (y - cv) * (y - cv)) - radius);
             if (deviation > options.RadiusTolerance * radius) return null;
         }
 
-        var centre = origin + u * cu + v * cv;
-        var along = vertices.Select(vertex => (vertex - centre).Dot(axis)).ToList();
-        var lowest = along.Min();
+        Vec3 centre = origin + u * cu + v * cv;
+        List<double> along = vertices.Select(vertex => (vertex - centre).Dot(axis)).ToList();
+        double lowest = along.Min();
 
         return new CylinderFit(
             component,
@@ -254,14 +210,14 @@ public static class PrimitiveFitter
         IndexedMesh mesh, RegionSet regions, List<int> component, Vec3 centre, Vec3 axis)
     {
         // Weighted by area, so one sliver cannot outvote the rest.
-        var vote = 0.0;
+        double vote = 0.0;
 
-        foreach (var index in component)
+        foreach (int index in component)
         {
-            var region = regions.Regions[index];
-            var centroid = Average([.. region.Triangles.Select(mesh.TriangleCentroid)]);
-            var offset = centroid - centre;
-            var radial = (offset - axis * offset.Dot(axis)).Normalized();
+            PlanarRegion region = regions.Regions[index];
+            Vec3 centroid = Average([.. region.Triangles.Select(mesh.TriangleCentroid)]);
+            Vec3 offset = centroid - centre;
+            Vec3 radial = (offset - axis * offset.Dot(axis)).Normalized();
             if (radial == Vec3.Zero) continue;
 
             vote += region.Area * region.Normal.Dot(radial);
@@ -275,13 +231,13 @@ public static class PrimitiveFitter
         Dictionary<int, Dictionary<int, Junction>> junctions,
         FittingOptions options)
     {
-        var inComponent = component.ToHashSet();
+        HashSet<int> inComponent = component.ToHashSet();
         Vec3? reference = null;
-        var sum = Vec3.Zero;
+        Vec3 sum = Vec3.Zero;
 
-        foreach (var region in component)
+        foreach (int region in component)
         {
-            foreach (var junction in junctions[region].Values)
+            foreach (Junction junction in junctions[region].Values)
             {
                 if (!inComponent.Contains(junction.Other)) continue;
 
@@ -304,11 +260,11 @@ public static class PrimitiveFitter
     private static (double X, double Y, double Radius)? FitCircle(List<(double X, double Y)> points)
     {
         double sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0, sz = 0, sxz = 0, syz = 0;
-        var n = points.Count;
+        int n = points.Count;
 
-        foreach (var (x, y) in points)
+        foreach ((double x, double y) in points)
         {
-            var z = x * x + y * y;
+            double z = x * x + y * y;
             sx += x; sy += y; sz += z;
             sxx += x * x; syy += y * y; sxy += x * y;
             sxz += x * z; syz += y * z;
@@ -317,12 +273,12 @@ public static class PrimitiveFitter
         double[,] matrix = { { sxx, sxy, sx }, { sxy, syy, sy }, { sx, sy, n } };
         double[] right = { -sxz, -syz, -sz };
 
-        var solution = Solve3(matrix, right);
+        double[]? solution = Solve3(matrix, right);
         if (solution is null) return null;
 
-        var centreX = -solution[0] / 2;
-        var centreY = -solution[1] / 2;
-        var squared = centreX * centreX + centreY * centreY - solution[2];
+        double centreX = -solution[0] / 2;
+        double centreY = -solution[1] / 2;
+        double squared = centreX * centreX + centreY * centreY - solution[2];
 
         return squared <= 0 ? null : (centreX, centreY, Math.Sqrt(squared));
     }
@@ -330,33 +286,33 @@ public static class PrimitiveFitter
     /// <summary>Gaussian elimination with partial pivoting; null when the system is degenerate.</summary>
     private static double[]? Solve3(double[,] a, double[] b)
     {
-        for (var column = 0; column < 3; column++)
+        for (int column = 0; column < 3; column++)
         {
-            var pivot = column;
-            for (var row = column + 1; row < 3; row++)
+            int pivot = column;
+            for (int row = column + 1; row < 3; row++)
                 if (Math.Abs(a[row, column]) > Math.Abs(a[pivot, column])) pivot = row;
 
             if (Math.Abs(a[pivot, column]) < 1e-12) return null;
 
             if (pivot != column)
             {
-                for (var k = 0; k < 3; k++) (a[column, k], a[pivot, k]) = (a[pivot, k], a[column, k]);
+                for (int k = 0; k < 3; k++) (a[column, k], a[pivot, k]) = (a[pivot, k], a[column, k]);
                 (b[column], b[pivot]) = (b[pivot], b[column]);
             }
 
-            for (var row = column + 1; row < 3; row++)
+            for (int row = column + 1; row < 3; row++)
             {
-                var factor = a[row, column] / a[column, column];
-                for (var k = column; k < 3; k++) a[row, k] -= factor * a[column, k];
+                double factor = a[row, column] / a[column, column];
+                for (int k = column; k < 3; k++) a[row, k] -= factor * a[column, k];
                 b[row] -= factor * b[column];
             }
         }
 
-        var result = new double[3];
-        for (var row = 2; row >= 0; row--)
+        double[] result = new double[3];
+        for (int row = 2; row >= 0; row--)
         {
-            var sum = b[row];
-            for (var k = row + 1; k < 3; k++) sum -= a[row, k] * result[k];
+            double sum = b[row];
+            for (int k = row + 1; k < 3; k++) sum -= a[row, k] * result[k];
             result[row] = sum / a[row, row];
         }
 
@@ -365,10 +321,10 @@ public static class PrimitiveFitter
 
     private static List<Vec3> DistinctVertices(IndexedMesh mesh, RegionSet regions, List<int> component)
     {
-        var indices = new HashSet<int>();
-        foreach (var index in component)
-            foreach (var triangle in regions.Regions[index].Triangles)
-                for (var corner = 0; corner < 3; corner++)
+        HashSet<int> indices = new();
+        foreach (int index in component)
+            foreach (int triangle in regions.Regions[index].Triangles)
+                for (int corner = 0; corner < 3; corner++)
                     indices.Add(mesh.Corner(triangle, corner));
 
         return [.. indices.Select(mesh.Vertex)];
@@ -376,8 +332,8 @@ public static class PrimitiveFitter
 
     private static Vec3 Average(IReadOnlyList<Vec3> points)
     {
-        var sum = Vec3.Zero;
-        foreach (var point in points) sum += point;
+        Vec3 sum = Vec3.Zero;
+        foreach (Vec3 point in points) sum += point;
         return points.Count == 0 ? Vec3.Zero : sum / points.Count;
     }
 
@@ -385,8 +341,8 @@ public static class PrimitiveFitter
     {
         // Any direction not along the axis will do; picking the least aligned
         // one keeps the cross product well conditioned.
-        var helper = Math.Abs(axis.X) < 0.9 ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0);
-        var u = axis.Cross(helper).Normalized();
+        Vec3 helper = Math.Abs(axis.X) < 0.9 ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0);
+        Vec3 u = axis.Cross(helper).Normalized();
         return (u, axis.Cross(u).Normalized());
     }
 
@@ -409,39 +365,39 @@ public static class PrimitiveFitter
     public static IReadOnlyList<ConeFit> FindCones(
         MeshTopology topology, RegionSet regions, FittingOptions options, IReadOnlyList<int> alreadyClaimed)
     {
-        var junctions = FindJunctions(topology, regions);
-        var used = alreadyClaimed.ToHashSet();
-        var found = new List<ConeFit>();
+        Dictionary<int, Dictionary<int, Junction>> junctions = FindJunctions(topology, regions);
+        HashSet<int> used = alreadyClaimed.ToHashSet();
+        List<ConeFit> found = new();
 
-        for (var seed = 0; seed < regions.Regions.Count; seed++)
+        for (int seed = 0; seed < regions.Regions.Count; seed++)
         {
-            if (used.Contains(seed) || !junctions.TryGetValue(seed, out var atSeed)) continue;
+            if (used.Contains(seed) || !junctions.TryGetValue(seed, out Dictionary<int, Junction>? atSeed)) continue;
 
-            var candidates = atSeed.Values.ToList();
-            var accepted = false;
+            List<Junction> candidates = atSeed.Values.ToList();
+            bool accepted = false;
 
             // Two junctions of the seed propose an apex: the point where their
             // lines come closest. Every pair is tried, because a facet's other
             // junctions run along the base and say nothing about the apex.
-            for (var i = 0; i < candidates.Count && !accepted; i++)
+            for (int i = 0; i < candidates.Count && !accepted; i++)
             {
-                for (var j = i + 1; j < candidates.Count && !accepted; j++)
+                for (int j = i + 1; j < candidates.Count && !accepted; j++)
                 {
-                    var apex = ClosestPointBetween(
+                    Vec3? apex = ClosestPointBetween(
                         candidates[i], candidates[j], options, topology.Mesh.BoundingBoxDiagonal());
                     if (apex is null) continue;
 
-                    var component = GrowTowards(seed, apex.Value, junctions, used, options, topology.Mesh);
+                    List<int> component = GrowTowards(seed, apex.Value, junctions, used, options, topology.Mesh);
                     if (component.Count < options.MinimumFacets) continue;
                     if (!IsClosedFan(component, apex.Value, junctions, options, topology.Mesh)) continue;
 
                     if (!EndsAtAnEdge(component, regions, junctions, options)) continue;
 
-                    var fit = TryFitCone(topology.Mesh, regions, component, junctions, options);
+                    ConeFit? fit = TryFitCone(topology.Mesh, regions, component, junctions, options);
                     if (fit is null) continue;
 
                     found.Add(fit);
-                    foreach (var region in component) used.Add(region);
+                    foreach (int region in component) used.Add(region);
                     accepted = true;
                 }
             }
@@ -465,24 +421,24 @@ public static class PrimitiveFitter
     {
         if (AreParallel(a.Direction, b.Direction, 1e-3)) return null;
 
-        var between = b.Point - a.Point;
-        var dot = a.Direction.Dot(b.Direction);
-        var denominator = 1 - dot * dot;
+        Vec3 between = b.Point - a.Point;
+        double dot = a.Direction.Dot(b.Direction);
+        double denominator = 1 - dot * dot;
         if (Math.Abs(denominator) < 1e-12) return null;
 
-        var alongA = (between.Dot(a.Direction) - dot * between.Dot(b.Direction)) / denominator;
-        var alongB = (dot * between.Dot(a.Direction) - between.Dot(b.Direction)) / denominator;
+        double alongA = (between.Dot(a.Direction) - dot * between.Dot(b.Direction)) / denominator;
+        double alongB = (dot * between.Dot(a.Direction) - between.Dot(b.Direction)) / denominator;
 
         // Midpoint of the shortest connecting segment: with exact geometry the
         // lines meet and the two points coincide.
-        var apex = ((a.Point + a.Direction * alongA) + (b.Point + b.Direction * alongB)) * 0.5;
+        Vec3 apex = ((a.Point + a.Direction * alongA) + (b.Point + b.Direction * alongB)) * 0.5;
 
         return (apex - a.Point).Length > 100 * scale ? null : apex;
     }
 
     private static double DistanceToLine(Junction junction, Vec3 point)
     {
-        var offset = point - junction.Point;
+        Vec3 offset = point - junction.Point;
         return (offset - junction.Direction * offset.Dot(junction.Direction)).Length;
     }
 
@@ -495,18 +451,18 @@ public static class PrimitiveFitter
         FittingOptions options,
         IndexedMesh mesh)
     {
-        var tolerance = options.RadiusTolerance * Math.Max(mesh.BoundingBoxDiagonal(), 1e-9);
-        var component = new List<int>();
-        var visited = new HashSet<int> { seed };
-        var queue = new Queue<int>([seed]);
+        double tolerance = options.RadiusTolerance * Math.Max(mesh.BoundingBoxDiagonal(), 1e-9);
+        List<int> component = new();
+        HashSet<int> visited = new() { seed };
+        Queue<int> queue = new([seed]);
 
         while (queue.Count > 0)
         {
-            var region = queue.Dequeue();
+            int region = queue.Dequeue();
             component.Add(region);
 
-            if (!junctions.TryGetValue(region, out var neighbours)) continue;
-            foreach (var junction in neighbours.Values)
+            if (!junctions.TryGetValue(region, out Dictionary<int, Junction>? neighbours)) continue;
+            foreach (Junction junction in neighbours.Values)
             {
                 if (used.Contains(junction.Other) || visited.Contains(junction.Other)) continue;
                 if (DistanceToLine(junction, apex) > tolerance) continue;
@@ -531,12 +487,12 @@ public static class PrimitiveFitter
         FittingOptions options,
         IndexedMesh mesh)
     {
-        var tolerance = options.RadiusTolerance * Math.Max(mesh.BoundingBoxDiagonal(), 1e-9);
-        var inComponent = component.ToHashSet();
+        double tolerance = options.RadiusTolerance * Math.Max(mesh.BoundingBoxDiagonal(), 1e-9);
+        HashSet<int> inComponent = component.ToHashSet();
 
-        foreach (var region in component)
+        foreach (int region in component)
         {
-            var neighbours = junctions[region].Values.Count(junction =>
+            int neighbours = junctions[region].Values.Count(junction =>
                 inComponent.Contains(junction.Other) && DistanceToLine(junction, apex) <= tolerance);
 
             if (neighbours != 2) return false;
@@ -559,16 +515,16 @@ public static class PrimitiveFitter
         Dictionary<int, Dictionary<int, Junction>> junctions,
         FittingOptions options)
     {
-        var inComponent = component.ToHashSet();
-        var sharpest = 0.0;
+        HashSet<int> inComponent = component.ToHashSet();
+        double sharpest = 0.0;
 
-        foreach (var region in component)
+        foreach (int region in component)
         {
-            foreach (var junction in junctions[region].Values)
+            foreach (Junction junction in junctions[region].Values)
             {
                 if (inComponent.Contains(junction.Other)) continue;
 
-                var angle = regions.Regions[region].Normal.AngleTo(regions.Regions[junction.Other].Normal);
+                double angle = regions.Regions[region].Normal.AngleTo(regions.Regions[junction.Other].Normal);
                 sharpest = Math.Max(sharpest, angle * 180 / Math.PI);
             }
         }
@@ -583,23 +539,23 @@ public static class PrimitiveFitter
         Dictionary<int, Dictionary<int, Junction>> junctions,
         FittingOptions options)
     {
-        var apex = RefinedApex(component, junctions);
+        Vec3? apex = RefinedApex(component, junctions);
         if (apex is null) return null;
 
-        var vertices = DistinctVertices(mesh, regions, component);
+        List<Vec3> vertices = DistinctVertices(mesh, regions, component);
         if (vertices.Count < 3) return null;
 
-        var axis = (Average(vertices) - apex.Value).Normalized();
+        Vec3 axis = (Average(vertices) - apex.Value).Normalized();
         if (axis == Vec3.Zero) return null;
 
         // Distance from the apex along the axis, and away from it. On a cone the
         // second is a fixed multiple of the first.
-        var heights = new List<double>(vertices.Count);
-        var radii = new List<double>(vertices.Count);
-        foreach (var vertex in vertices)
+        List<double> heights = new(vertices.Count);
+        List<double> radii = new(vertices.Count);
+        foreach (Vec3 vertex in vertices)
         {
-            var offset = vertex - apex.Value;
-            var along = offset.Dot(axis);
+            Vec3 offset = vertex - apex.Value;
+            double along = offset.Dot(axis);
             heights.Add(along);
             radii.Add((offset - axis * along).Length);
         }
@@ -607,31 +563,31 @@ public static class PrimitiveFitter
         if (heights.Min() < -1e-9) return null; // the fan straddles the apex
 
         double numerator = 0, denominator = 0;
-        for (var i = 0; i < heights.Count; i++)
+        for (int i = 0; i < heights.Count; i++)
         {
             numerator += radii[i] * heights[i];
             denominator += heights[i] * heights[i];
         }
         if (denominator < 1e-18) return null;
 
-        var slope = numerator / denominator;
+        double slope = numerator / denominator;
         if (slope <= 1e-9) return null; // no taper: that is a cylinder, not a cone
 
-        var scale = Math.Max(mesh.BoundingBoxDiagonal(), 1e-9);
-        for (var i = 0; i < heights.Count; i++)
+        double scale = Math.Max(mesh.BoundingBoxDiagonal(), 1e-9);
+        for (int i = 0; i < heights.Count; i++)
             if (Math.Abs(radii[i] - slope * heights[i]) > options.RadiusTolerance * scale) return null;
 
         // The kernel builds a cone from its wider end, so that is where the base
         // point goes and the axis runs from there towards the apex.
-        var widest = heights.Max();
-        var narrowest = heights.Min();
-        var bottomRadius = slope * widest;
+        double widest = heights.Max();
+        double narrowest = heights.Min();
+        double bottomRadius = slope * widest;
 
         // A full cone's tip should come out at exactly zero, but the fitted apex
         // sits a hair off the one in the mesh, so it lands on something like
         // 1e-9 instead. That is not zero and it is not a radius either: the
         // kernel refuses to build a cone that thin. Snapping it closes the gap.
-        var topRadius = slope * narrowest;
+        double topRadius = slope * narrowest;
         if (topRadius < 1e-6 * bottomRadius) topRadius = 0;
 
         return new ConeFit(
@@ -653,14 +609,14 @@ public static class PrimitiveFitter
     private static Vec3? RefinedApex(
         List<int> component, Dictionary<int, Dictionary<int, Junction>> junctions)
     {
-        var inComponent = component.ToHashSet();
-        var matrix = new double[3, 3];
-        var right = new double[3];
-        var lines = 0;
+        HashSet<int> inComponent = component.ToHashSet();
+        double[,] matrix = new double[3, 3];
+        double[] right = new double[3];
+        int lines = 0;
 
-        foreach (var region in component)
+        foreach (int region in component)
         {
-            foreach (var junction in junctions[region].Values)
+            foreach (Junction junction in junctions[region].Values)
             {
                 if (!inComponent.Contains(junction.Other)) continue;
                 lines++;
@@ -670,11 +626,11 @@ public static class PrimitiveFitter
                 double[] d = [junction.Direction.X, junction.Direction.Y, junction.Direction.Z];
                 double[] p = [junction.Point.X, junction.Point.Y, junction.Point.Z];
 
-                for (var row = 0; row < 3; row++)
+                for (int row = 0; row < 3; row++)
                 {
-                    for (var column = 0; column < 3; column++)
+                    for (int column = 0; column < 3; column++)
                     {
-                        var projection = (row == column ? 1 : 0) - d[row] * d[column];
+                        double projection = (row == column ? 1 : 0) - d[row] * d[column];
                         matrix[row, column] += projection;
                         right[row] += projection * p[column];
                     }
@@ -684,7 +640,7 @@ public static class PrimitiveFitter
 
         if (lines < 2) return null;
 
-        var solution = Solve3(matrix, right);
+        double[]? solution = Solve3(matrix, right);
         return solution is null ? null : new Vec3(solution[0], solution[1], solution[2]);
     }
 
@@ -692,14 +648,3 @@ public static class PrimitiveFitter
     /// which is what cone recovery intersects to find the apex.</param>
     private readonly record struct Junction(int Other, Vec3 Direction, Vec3 Point);
 }
-
-/// <summary>
-/// A fan of flat facets that together describe one cone, full or truncated.
-/// </summary>
-public sealed record ConeFit(
-    IReadOnlyList<int> RegionIndices,
-    Vec3 BasePoint,
-    Vec3 Axis,
-    double BottomRadius,
-    double TopRadius,
-    double Height);

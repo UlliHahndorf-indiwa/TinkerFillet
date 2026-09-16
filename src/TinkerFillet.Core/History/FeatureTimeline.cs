@@ -2,29 +2,6 @@ using System.Collections.Immutable;
 
 namespace TinkerFillet.Core.History;
 
-public enum FeatureStatus
-{
-    /// <summary>Applied cleanly during the last replay.</summary>
-    Applied,
-
-    /// <summary>
-    /// Its edge could not be found, or the fillet would not build. The step
-    /// stays in the list and is skipped, so the work behind it is not lost and
-    /// the user can point at the edge again.
-    /// </summary>
-    Failed,
-}
-
-public sealed record FilletFeature(
-    Guid Id,
-    EdgeSelector Selector,
-    double Radius,
-    FeatureStatus Status = FeatureStatus.Applied)
-{
-    public static FilletFeature Create(EdgeSelector selector, double radius) =>
-        new(Guid.NewGuid(), selector, radius);
-}
-
 /// <summary>
 /// The ordered list of fillets, with undo and redo.
 ///
@@ -57,9 +34,9 @@ public sealed class FeatureTimeline
     /// </summary>
     public void RecordOutcomes(IReadOnlyList<FilletFeature> replayed)
     {
-        var byId = replayed.ToDictionary(feature => feature.Id, feature => feature.Status);
+        Dictionary<Guid, FeatureStatus> byId = replayed.ToDictionary(feature => feature.Id, feature => feature.Status);
         _versions[_current] = _versions[_current]
-            .Select(feature => byId.TryGetValue(feature.Id, out var status)
+            .Select(feature => byId.TryGetValue(feature.Id, out FeatureStatus status)
                 ? feature with { Status = status }
                 : feature)
             .ToImmutableList();
@@ -77,7 +54,7 @@ public sealed class FeatureTimeline
 
     private void Commit(Func<ImmutableList<FilletFeature>, ImmutableList<FilletFeature>> change)
     {
-        var next = change(_versions[_current]);
+        ImmutableList<FilletFeature> next = change(_versions[_current]);
         if (next == _versions[_current]) return; // nothing actually changed
 
         // Anything that was undone is now unreachable: the user has taken a
@@ -91,7 +68,7 @@ public sealed class FeatureTimeline
     private static ImmutableList<FilletFeature> Replace(
         ImmutableList<FilletFeature> list, Guid id, Func<FilletFeature, FilletFeature> change)
     {
-        var index = list.FindIndex(feature => feature.Id == id);
+        int index = list.FindIndex(feature => feature.Id == id);
         return index < 0 ? list : list.SetItem(index, change(list[index]));
     }
 }

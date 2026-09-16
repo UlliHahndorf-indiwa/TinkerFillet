@@ -1,0 +1,80 @@
+.working {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--ground) 82%, transparent);
+    z-index: 5;
+}
+
+.working-card {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    min-width: 19rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--paper);
+    box-shadow: 0 2px 12px rgb(0 0 0 / 12%);
+}
+
+.working-spinner {
+    flex: none;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 3px solid var(--line);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: working-turn 0.9s linear infinite;
+}
+
+/* Turned with a transform on purpose. A step can hold the one thread
+   WebAssembly runs on for seconds at a time, and an animation that needed
+   layout would freeze with it and read as a hang. A transform is handed to the
+   compositor and keeps going. */
+@keyframes working-turn {
+    to { transform: rotate(360deg); }
+}
+
+.working-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.working-step {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+/* A real progress element rather than two nested divs with a width on them:
+   the value is data, not styling, and it needs no inline style to carry it. */
+.working-bar {
+    appearance: none;
+    display: block;
+    width: 100%;
+    height: 4px;
+    margin-top: 0.15rem;
+    border: none;
+    border-radius: 2px;
+    background: var(--line);
+}
+
+.working-bar::-webkit-progress-bar {
+    border-radius: 2px;
+    background: var(--line);
+}
+
+.working-bar::-webkit-progress-value {
+    border-radius: 2px;
+    background: var(--accent);
+    transition: width 0.2s ease-out;
+}
+
+.working-bar::-moz-progress-bar {
+    border-radius: 2px;
+    background: var(--accent);
+}

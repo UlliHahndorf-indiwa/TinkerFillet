@@ -8,23 +8,23 @@ public class MeshTopologyTests
     [Fact]
     public void ClosedCubeHasEveryHalfEdgePaired()
     {
-        var topology = Build(MeshFixtures.Cube(subdivisions: 3));
+        MeshTopology topology = Build(MeshFixtures.Cube(subdivisions: 3));
 
         Assert.True(topology.IsClosedManifold);
         Assert.Empty(topology.BoundaryHalfEdges);
         Assert.Empty(topology.NonManifoldHalfEdges);
-        for (var halfEdge = 0; halfEdge < topology.HalfEdgeCount; halfEdge++)
+        for (int halfEdge = 0; halfEdge < topology.HalfEdgeCount; halfEdge++)
             Assert.NotEqual(MeshTopology.NoOpposite, topology.Opposite[halfEdge]);
     }
 
     [Fact]
     public void PairingIsSymmetric()
     {
-        var topology = Build(MeshFixtures.Cube(subdivisions: 2));
+        MeshTopology topology = Build(MeshFixtures.Cube(subdivisions: 2));
 
-        for (var halfEdge = 0; halfEdge < topology.HalfEdgeCount; halfEdge++)
+        for (int halfEdge = 0; halfEdge < topology.HalfEdgeCount; halfEdge++)
         {
-            var opposite = topology.Opposite[halfEdge];
+            int opposite = topology.Opposite[halfEdge];
             Assert.Equal(halfEdge, topology.Opposite[opposite]);
         }
     }
@@ -32,7 +32,7 @@ public class MeshTopologyTests
     [Fact]
     public void SingleTriangleReportsThreeOpenEdges()
     {
-        var topology = Build(MeshFixtures.SingleTriangle());
+        MeshTopology topology = Build(MeshFixtures.SingleTriangle());
 
         Assert.False(topology.IsClosedManifold);
         Assert.Equal(3, topology.BoundaryHalfEdges.Count);
@@ -44,7 +44,7 @@ public class MeshTopologyTests
     {
         // No solid can have three faces meeting along an edge. Accepting it
         // would produce nonsense much later, during sewing.
-        var topology = Build(MeshFixtures.NonManifoldEdge());
+        MeshTopology topology = Build(MeshFixtures.NonManifoldEdge());
 
         Assert.False(topology.IsClosedManifold);
         Assert.NotEmpty(topology.NonManifoldHalfEdges);
@@ -53,7 +53,7 @@ public class MeshTopologyTests
     [Fact]
     public void PrismSideIsClosedAndManifold()
     {
-        var topology = Build(MeshFixtures.Prism(sides: 20));
+        MeshTopology topology = Build(MeshFixtures.Prism(sides: 20));
 
         Assert.True(topology.IsClosedManifold);
     }
@@ -63,7 +63,7 @@ public class MeshTopologyTests
     {
         // The hole makes this the first fixture whose faces have inner
         // boundaries, but the solid itself is still watertight.
-        var topology = Build(MeshFixtures.PlateWithSquareHole());
+        MeshTopology topology = Build(MeshFixtures.PlateWithSquareHole());
 
         Assert.True(topology.IsClosedManifold);
         Assert.Empty(topology.BoundaryHalfEdges);
@@ -72,8 +72,8 @@ public class MeshTopologyTests
     [Fact]
     public void HalfEdgeEndpointsFollowTriangleWinding()
     {
-        var mesh = Welder.Weld(MeshFixtures.SingleTriangle(), 1e-6);
-        var topology = MeshTopology.Build(mesh);
+        IndexedMesh mesh = Welder.Weld(MeshFixtures.SingleTriangle(), 1e-6);
+        MeshTopology topology = MeshTopology.Build(mesh);
 
         // Half-edge c of triangle t runs from corner c to corner (c+1)%3.
         Assert.Equal(mesh.Corner(0, 0), topology.From(0));

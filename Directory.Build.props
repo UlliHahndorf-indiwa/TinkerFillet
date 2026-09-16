@@ -16,6 +16,19 @@
       Cheaper to stop at the warning than to debug the result later.
     -->
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!--
+      The style rules in .editorconfig run at build time, so a rule the
+      styleguide states is a rule the build holds rather than a reviewer.
+      IDE0005 - the unused using - only reports once a documentation file is
+      generated. Generating one then asks for a comment on every public member
+      (CS1591) and for all of a member's parameters once any is documented
+      (CS1573). Both are noise here: the comments in this project explain the
+      one parameter that is not obvious and leave the rest alone.
+    -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
   </PropertyGroup>
 
 </Project>

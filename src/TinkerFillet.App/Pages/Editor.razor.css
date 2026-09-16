@@ -1,0 +1,106 @@
+/* One screen, three areas: a toolbar, the model, and the list of fillets. */
+.editor {
+    display: grid;
+    grid-template-columns: 1fr 20rem;
+    grid-template-rows: auto 1fr;
+    height: 100%;
+    outline: none; /* focusable only so it can receive the keyboard shortcuts */
+}
+
+.toolbar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 0.6rem 1rem;
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+    font-size: 0.9rem;
+}
+
+.toolbar strong {
+    font-size: 1rem;
+    letter-spacing: 0.01em;
+}
+
+.toolbar .file {
+    cursor: pointer;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 0.35rem;
+    background: var(--ground);
+}
+
+/* ::deep because the input belongs to InputFile, not to this component, so it
+   does not carry this stylesheet's scope attribute. Without it the file picker
+   sits in the toolbar in its raw form. */
+.toolbar .file ::deep input {
+    display: none;
+}
+
+.toolbar .slider {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--muted);
+}
+
+.toolbar .slider span {
+    min-width: 2.5rem;
+}
+
+.toolbar button {
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 0.35rem;
+    background: var(--paper);
+    cursor: pointer;
+    font: inherit;
+}
+
+.toolbar button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.stage {
+    position: relative;
+    overflow: hidden;
+}
+
+.stage canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    pointer-events: none; /* the canvas underneath still takes the clicks */
+    text-align: center;
+}
+
+.side {
+    border-left: 1px solid var(--line);
+    background: var(--paper);
+    overflow-y: auto;
+    padding: 0.75rem;
+}
+
+.note {
+    padding: 0.5rem 0.65rem;
+    border-radius: 0.35rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+    border-left: 3px solid var(--line);
+    background: var(--ground);
+}
+
+.note.error { border-left-color: var(--error); }
+.note.warn { border-left-color: var(--warn); }

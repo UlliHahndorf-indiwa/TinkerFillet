@@ -8,7 +8,7 @@ public class FeatureTimelineTests
     [Fact]
     public void StartsEmptyWithNothingToUndo()
     {
-        var timeline = new FeatureTimeline();
+        FeatureTimeline timeline = new();
 
         Assert.Empty(timeline.Features);
         Assert.False(timeline.CanUndo);
@@ -18,7 +18,7 @@ public class FeatureTimelineTests
     [Fact]
     public void AddingAFeatureCanBeUndoneAndRedone()
     {
-        var timeline = new FeatureTimeline();
+        FeatureTimeline timeline = new();
         timeline.Add(Feature(2));
 
         Assert.Single(timeline.Features);
@@ -35,8 +35,8 @@ public class FeatureTimelineTests
     [Fact]
     public void ChangingARadiusIsItsOwnUndoStep()
     {
-        var feature = Feature(2);
-        var timeline = new FeatureTimeline();
+        FilletFeature feature = Feature(2);
+        FeatureTimeline timeline = new();
         timeline.Add(feature);
 
         timeline.SetRadius(feature.Id, 5);
@@ -49,8 +49,8 @@ public class FeatureTimelineTests
     [Fact]
     public void RemovingAFeatureCanBeUndone()
     {
-        var feature = Feature(2);
-        var timeline = new FeatureTimeline();
+        FilletFeature feature = Feature(2);
+        FeatureTimeline timeline = new();
         timeline.Add(feature);
         timeline.Add(Feature(3));
 
@@ -66,7 +66,7 @@ public class FeatureTimelineTests
     {
         // Otherwise redo would reappear later and replace work the user has
         // since done.
-        var timeline = new FeatureTimeline();
+        FeatureTimeline timeline = new();
         timeline.Add(Feature(1));
         timeline.Add(Feature(2));
         timeline.Undo();
@@ -89,7 +89,7 @@ public class FeatureTimelineTests
     [Fact]
     public void AChangeThatChangesNothingDoesNotCostAnUndoStep()
     {
-        var timeline = new FeatureTimeline();
+        FeatureTimeline timeline = new();
         timeline.Add(Feature(1));
 
         timeline.Remove(Guid.NewGuid()); // no such feature
@@ -104,8 +104,8 @@ public class FeatureTimelineTests
     {
         // Which steps failed is an observation about the current list, not an
         // edit the user made, so undo must not step through it.
-        var feature = Feature(2);
-        var timeline = new FeatureTimeline();
+        FilletFeature feature = Feature(2);
+        FeatureTimeline timeline = new();
         timeline.Add(feature);
 
         timeline.RecordOutcomes([feature with { Status = FeatureStatus.Failed }]);
@@ -120,7 +120,7 @@ public class FeatureTimelineTests
     {
         // Fillets are not commutative: rounding a long edge first changes what
         // its neighbours even are.
-        var timeline = new FeatureTimeline();
+        FeatureTimeline timeline = new();
         timeline.Add(Feature(1));
         timeline.Add(Feature(2));
         timeline.Add(Feature(3));

@@ -12,7 +12,7 @@ public class RegionGrowerTests
     {
         // The whole point of the stage: 192 triangles describe six flat faces,
         // and everything downstream depends on getting six, not 192.
-        var regions = Grow(MeshFixtures.Cube(subdivisions: 4));
+        RegionSet regions = Grow(MeshFixtures.Cube(subdivisions: 4));
 
         Assert.Equal(6, regions.Regions.Count);
     }
@@ -23,7 +23,7 @@ public class RegionGrowerTests
         // Region growing carries a running plane estimate. If that estimate
         // drifts as triangles accumulate, a large face eventually splits. A
         // finer subdivision is what exposes such drift.
-        var regions = Grow(MeshFixtures.Cube(subdivisions: 12));
+        RegionSet regions = Grow(MeshFixtures.Cube(subdivisions: 12));
 
         Assert.Equal(6, regions.Regions.Count);
     }
@@ -31,13 +31,13 @@ public class RegionGrowerTests
     [Fact]
     public void EveryTriangleBelongsToExactlyOneRegion()
     {
-        var soup = MeshFixtures.Cube(subdivisions: 3);
-        var regions = Grow(soup);
+        TriangleSoup soup = MeshFixtures.Cube(subdivisions: 3);
+        RegionSet regions = Grow(soup);
 
-        var seen = new HashSet<int>();
-        foreach (var region in regions.Regions)
+        HashSet<int> seen = new();
+        foreach (PlanarRegion region in regions.Regions)
         {
-            foreach (var triangle in region.Triangles)
+            foreach (int triangle in region.Triangles)
                 Assert.True(seen.Add(triangle), $"triangle {triangle} is in two regions");
         }
         Assert.Equal(soup.TriangleCount, seen.Count);
@@ -46,11 +46,11 @@ public class RegionGrowerTests
     [Fact]
     public void RegionLookupAgreesWithRegionMembership()
     {
-        var regions = Grow(MeshFixtures.Cube(subdivisions: 3));
+        RegionSet regions = Grow(MeshFixtures.Cube(subdivisions: 3));
 
-        for (var index = 0; index < regions.Regions.Count; index++)
+        for (int index = 0; index < regions.Regions.Count; index++)
         {
-            foreach (var triangle in regions.Regions[index].Triangles)
+            foreach (int triangle in regions.Regions[index].Triangles)
                 Assert.Equal(index, regions.RegionOfTriangle[triangle]);
         }
     }
@@ -58,7 +58,7 @@ public class RegionGrowerTests
     [Fact]
     public void CubeRegionsCarryTheSixAxisNormals()
     {
-        var regions = Grow(MeshFixtures.Cube(size: 10, subdivisions: 2));
+        RegionSet regions = Grow(MeshFixtures.Cube(size: 10, subdivisions: 2));
 
         Vec3[] expected =
         [
@@ -67,7 +67,7 @@ public class RegionGrowerTests
             new(0, 0, 1), new(0, 0, -1),
         ];
 
-        foreach (var axis in expected)
+        foreach (Vec3 axis in expected)
         {
             Assert.Contains(regions.Regions, region => region.Normal.AngleTo(axis) < 1e-9);
         }
@@ -77,13 +77,13 @@ public class RegionGrowerTests
     public void CubeRegionPlanesSitOnTheCubeFaces()
     {
         const double size = 10;
-        var regions = Grow(MeshFixtures.Cube(size, subdivisions: 2));
+        RegionSet regions = Grow(MeshFixtures.Cube(size, subdivisions: 2));
 
-        foreach (var region in regions.Regions)
+        foreach (PlanarRegion region in regions.Regions)
         {
             // Plane offsets of an axis-aligned cube from the origin are 0 or
             // +/- size, depending on which way the normal points.
-            var offset = Math.Abs(region.Offset);
+            double offset = Math.Abs(region.Offset);
             Assert.True(offset < 1e-9 || Math.Abs(offset - size) < 1e-9, $"unexpected plane offset {region.Offset}");
         }
     }
@@ -91,16 +91,16 @@ public class RegionGrowerTests
     [Fact]
     public void EachCubeFaceKeepsAllItsTriangles()
     {
-        var regions = Grow(MeshFixtures.Cube(subdivisions: 4));
+        RegionSet regions = Grow(MeshFixtures.Cube(subdivisions: 4));
 
-        foreach (var region in regions.Regions)
+        foreach (PlanarRegion region in regions.Regions)
             Assert.Equal(4 * 4 * 2, region.Triangles.Count);
     }
 
     [Fact]
     public void PlateWithHoleYieldsTopBottomFourWallsAndFourHoleWalls()
     {
-        var regions = Grow(MeshFixtures.PlateWithSquareHole());
+        RegionSet regions = Grow(MeshFixtures.PlateWithSquareHole());
 
         Assert.Equal(10, regions.Regions.Count);
     }
@@ -112,7 +112,7 @@ public class RegionGrowerTests
         // Recognising it as round is a later stage, and must not be
         // accidentally pre-empted here.
         const int sides = 20;
-        var regions = Grow(MeshFixtures.Prism(sides));
+        RegionSet regions = Grow(MeshFixtures.Prism(sides));
 
         Assert.Equal(sides + 2, regions.Regions.Count);
     }
@@ -122,9 +122,9 @@ public class RegionGrowerTests
     {
         // Exporters round coordinates, so a flat face's triangles are never
         // exactly coplanar. Splitting on that would defeat the whole stage.
-        var soup = TwoTrianglesWithDihedralAngle(Math.PI / 180 * 0.1); // 0.1 degrees
+        TriangleSoup soup = TwoTrianglesWithDihedralAngle(Math.PI / 180 * 0.1); // 0.1 degrees
 
-        var regions = Grow(soup);
+        RegionSet regions = Grow(soup);
 
         Assert.Single(regions.Regions);
     }
@@ -132,9 +132,9 @@ public class RegionGrowerTests
     [Fact]
     public void SurfacesMeetingAboveTheAngleToleranceStaySeparate()
     {
-        var soup = TwoTrianglesWithDihedralAngle(Math.PI / 180 * 5);
+        TriangleSoup soup = TwoTrianglesWithDihedralAngle(Math.PI / 180 * 5);
 
-        var regions = Grow(soup);
+        RegionSet regions = Grow(soup);
 
         Assert.Equal(2, regions.Regions.Count);
     }
@@ -144,9 +144,9 @@ public class RegionGrowerTests
     {
         // Same normal, different plane. An angle test alone would merge the top
         // and bottom of a thin plate into one face.
-        var regions = Grow(MeshFixtures.PlateWithSquareHole(thickness: 0.5));
+        RegionSet regions = Grow(MeshFixtures.PlateWithSquareHole(thickness: 0.5));
 
-        var topOrBottom = regions.Regions
+        List<PlanarRegion> topOrBottom = regions.Regions
             .Where(region => Math.Abs(Math.Abs(region.Normal.Z) - 1) < 1e-9)
             .ToList();
 
@@ -159,7 +159,7 @@ public class RegionGrowerTests
     /// </summary>
     private static TriangleSoup TwoTrianglesWithDihedralAngle(double angle)
     {
-        var lifted = new Vec3(0, -Math.Cos(angle), Math.Sin(angle));
+        Vec3 lifted = new(0, -Math.Cos(angle), Math.Sin(angle));
         double[] positions =
         [
             0, 0, 0, 1, 0, 0, 0, 1, 0,
@@ -170,7 +170,7 @@ public class RegionGrowerTests
 
     private static RegionSet Grow(TriangleSoup soup)
     {
-        var mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
+        IndexedMesh mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
         return RegionGrower.Grow(MeshTopology.Build(mesh), RegionOptions.ForModel(mesh));
     }
 }

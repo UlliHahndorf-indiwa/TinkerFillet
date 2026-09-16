@@ -9,9 +9,9 @@ public class StlReaderTests
     [Fact]
     public void ReadsBinaryTriangle()
     {
-        var bytes = StlFixtures.Binary([StlFixtures.SampleTriangle]);
+        byte[] bytes = StlFixtures.Binary([StlFixtures.SampleTriangle]);
 
-        var soup = StlReader.Read(bytes);
+        TriangleSoup soup = StlReader.Read(bytes);
 
         Assert.Equal(1, soup.TriangleCount);
         Assert.Equal(StlFixtures.SampleTriangle, soup.Positions, Precision);
@@ -20,9 +20,9 @@ public class StlReaderTests
     [Fact]
     public void ReadsAsciiTriangle()
     {
-        var bytes = StlFixtures.Ascii([StlFixtures.SampleTriangle]);
+        byte[] bytes = StlFixtures.Ascii([StlFixtures.SampleTriangle]);
 
-        var soup = StlReader.Read(bytes);
+        TriangleSoup soup = StlReader.Read(bytes);
 
         Assert.Equal(1, soup.TriangleCount);
         Assert.Equal(StlFixtures.SampleTriangle, soup.Positions, Precision);
@@ -34,9 +34,9 @@ public class StlReaderTests
         // Several exporters write "solid <name>" into the binary header, so
         // sniffing the first five bytes misclassifies their files. The size
         // relationship is the only reliable signal.
-        var bytes = StlFixtures.Binary([StlFixtures.SampleTriangle], header: "solid exported by something");
+        byte[] bytes = StlFixtures.Binary([StlFixtures.SampleTriangle], header: "solid exported by something");
 
-        var soup = StlReader.Read(bytes);
+        TriangleSoup soup = StlReader.Read(bytes);
 
         Assert.Equal(1, soup.TriangleCount);
         Assert.Equal(StlFixtures.SampleTriangle, soup.Positions, Precision);
@@ -48,11 +48,11 @@ public class StlReaderTests
         // The development and target machines run a German locale, where the
         // decimal separator is a comma. Parsing STL with the current culture
         // would silently turn 1.5 into 15.
-        var previous = CultureInfo.CurrentCulture;
+        CultureInfo previous = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = new CultureInfo("de-DE");
         try
         {
-            var soup = StlReader.Read(StlFixtures.Ascii([StlFixtures.SampleTriangle]));
+            TriangleSoup soup = StlReader.Read(StlFixtures.Ascii([StlFixtures.SampleTriangle]));
 
             Assert.Equal(StlFixtures.SampleTriangle, soup.Positions, Precision);
         }
@@ -67,7 +67,7 @@ public class StlReaderTests
     {
         double[] second = [1, 1, 1, 2, 1, 1, 1, 2, 1];
 
-        var soup = StlReader.Read(StlFixtures.Binary([StlFixtures.SampleTriangle, second]));
+        TriangleSoup soup = StlReader.Read(StlFixtures.Binary([StlFixtures.SampleTriangle, second]));
 
         Assert.Equal(2, soup.TriangleCount);
         Assert.Equal(second, soup.Triangle(1).ToArray(), Precision);
@@ -76,10 +76,10 @@ public class StlReaderTests
     [Fact]
     public void TruncatedBinaryFileIsRejectedWithAUsefulMessage()
     {
-        var bytes = StlFixtures.Binary([StlFixtures.SampleTriangle]);
-        var truncated = bytes[..^10];
+        byte[] bytes = StlFixtures.Binary([StlFixtures.SampleTriangle]);
+        byte[] truncated = bytes[..^10];
 
-        var error = Assert.Throws<StlFormatException>(() => StlReader.Read(truncated));
+        StlFormatException error = Assert.Throws<StlFormatException>(() => StlReader.Read(truncated));
 
         Assert.Contains("1", error.Message); // states the triangle count it expected
     }
@@ -93,7 +93,7 @@ public class StlReaderTests
     [Fact]
     public void AsciiFacetWithTooFewVerticesIsRejected()
     {
-        var broken = """
+        byte[] broken = """
             solid test
               facet normal 0 0 0
                 outer loop

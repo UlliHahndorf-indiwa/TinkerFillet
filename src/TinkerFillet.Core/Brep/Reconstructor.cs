@@ -5,42 +5,6 @@ using TinkerFillet.Core.Stl;
 namespace TinkerFillet.Core.Brep;
 
 /// <summary>
-/// Everything the reconstruction produced, kept together because the later
-/// stages need more than the recipe: picking maps back to regions, and the
-/// diagnostics decide what the user is told.
-/// </summary>
-public sealed class ReconstructionResult
-{
-    public required BrepRecipe Recipe { get; init; }
-    public required IndexedMesh Mesh { get; init; }
-    public required MeshTopology Topology { get; init; }
-    public required RegionSet Regions { get; init; }
-    public required IReadOnlyList<RegionLoops> Loops { get; init; }
-    public required IReadOnlyList<CylinderFit> Cylinders { get; init; }
-    public required IReadOnlyList<ConeFit> Cones { get; init; }
-    public required IReadOnlyList<Diagnostic> Diagnostics { get; init; }
-}
-
-/// <summary>
-/// The steps of the pipeline, in the order they run.
-///
-/// They exist so the caller can say what is happening. Reconstructing a plate
-/// with tens of thousands of triangles takes long enough that silence reads as
-/// a hang, and one step is not a fixed fraction of the others - which of them
-/// dominates depends on the model.
-/// </summary>
-public enum ReconstructionStage
-{
-    Welding,
-    Topology,
-    Regions,
-    Loops,
-    Cylinders,
-    Cones,
-    Recipe,
-}
-
-/// <summary>
 /// Runs the whole mesh-side pipeline: weld, topology, regions, loops, cylinder
 /// recovery, recipe.
 /// </summary>
@@ -78,27 +42,27 @@ public static class Reconstructor
         Task Announce(ReconstructionStage stage) => onStage?.Invoke(stage) ?? Task.CompletedTask;
 
         await Announce(ReconstructionStage.Welding);
-        var mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
+        IndexedMesh mesh = Welder.Weld(soup, Welder.DefaultTolerance(soup));
 
         await Announce(ReconstructionStage.Topology);
-        var topology = MeshTopology.Build(mesh);
+        MeshTopology topology = MeshTopology.Build(mesh);
 
         await Announce(ReconstructionStage.Regions);
-        var regions = RegionGrower.Grow(topology, RegionOptions.ForModel(mesh));
+        RegionSet regions = RegionGrower.Grow(topology, RegionOptions.ForModel(mesh));
 
         await Announce(ReconstructionStage.Loops);
-        var loops = LoopExtractor.Extract(topology, regions, LoopOptions.Default);
+        IReadOnlyList<RegionLoops> loops = LoopExtractor.Extract(topology, regions, LoopOptions.Default);
 
         await Announce(ReconstructionStage.Cylinders);
-        var options = fitting ?? FittingOptions.Default;
-        var cylinders = PrimitiveFitter.FindCylinders(topology, regions, options);
+        FittingOptions options = fitting ?? FittingOptions.Default;
+        IReadOnlyList<CylinderFit> cylinders = PrimitiveFitter.FindCylinders(topology, regions, options);
 
         await Announce(ReconstructionStage.Cones);
-        var cones = PrimitiveFitter.FindCones(
+        IReadOnlyList<ConeFit> cones = PrimitiveFitter.FindCones(
             topology, regions, options, [.. cylinders.SelectMany(cylinder => cylinder.RegionIndices)]);
 
         await Announce(ReconstructionStage.Recipe);
-        var recipe = BuildRecipe(mesh, loops, cylinders, cones, SewTolerance(mesh));
+        BrepRecipe recipe = BuildRecipe(mesh, loops, cylinders, cones, SewTolerance(mesh));
 
         return new ReconstructionResult
         {
@@ -123,21 +87,21 @@ public static class Reconstructor
         IReadOnlyList<ConeFit> cones,
         double sewTolerance)
     {
-        var faces = new List<RecipeFace>(loops.Count);
-        var absorbed = cylinders.SelectMany(cylinder => cylinder.RegionIndices)
+        List<RecipeFace> faces = new(loops.Count);
+        HashSet<int> absorbed = cylinders.SelectMany(cylinder => cylinder.RegionIndices)
             .Concat(cones.SelectMany(cone => cone.RegionIndices))
             .ToHashSet();
 
         // One curved face replaces the whole fan of facets it was fitted to.
         // Its own boundary is implied by the surface and its extent.
-        foreach (var cylinder in cylinders)
+        foreach (CylinderFit cylinder in cylinders)
             faces.Add(RecipeFace.Cylinder(cylinder.BasePoint, cylinder.Axis, cylinder.Radius, cylinder.Height));
 
-        foreach (var cone in cones)
+        foreach (ConeFit cone in cones)
             faces.Add(RecipeFace.Cone(
                 cone.BasePoint, cone.Axis, cone.BottomRadius, cone.TopRadius, cone.Height));
 
-        foreach (var face in loops)
+        foreach (RegionLoops face in loops)
         {
             if (absorbed.Contains(face.RegionIndex)) continue;
 
@@ -162,16 +126,16 @@ public static class Reconstructor
     private static RecipeLoop ToRecipeLoop(
         IndexedMesh mesh, Loop loop, IReadOnlyList<CylinderFit> cylinders, IReadOnlyList<ConeFit> cones)
     {
-        var points = new double[loop.Vertices.Count * 3];
-        for (var i = 0; i < loop.Vertices.Count; i++)
+        double[] points = new double[loop.Vertices.Count * 3];
+        for (int i = 0; i < loop.Vertices.Count; i++)
         {
-            var vertex = mesh.Vertex(loop.Vertices[i]);
+            Vec3 vertex = mesh.Vertex(loop.Vertices[i]);
             points[i * 3] = vertex.X;
             points[i * 3 + 1] = vertex.Y;
             points[i * 3 + 2] = vertex.Z;
         }
 
-        var circle = AsRimOf(mesh, loop, cylinders, cones);
+        RecipeLoop? circle = AsRimOf(mesh, loop, cylinders, cones);
         return circle ?? RecipeLoop.Polygon(points);
     }
 
@@ -179,21 +143,21 @@ public static class Reconstructor
         IndexedMesh mesh, Loop loop, IReadOnlyList<CylinderFit> cylinders, IReadOnlyList<ConeFit> cones)
     {
         if (loop.Vertices.Count < 3) return null;
-        var vertices = loop.Vertices.Select(mesh.Vertex).ToList();
+        List<Vec3> vertices = loop.Vertices.Select(mesh.Vertex).ToList();
 
-        foreach (var cylinder in cylinders)
+        foreach (CylinderFit cylinder in cylinders)
         {
-            var found = RimOn(
+            RecipeLoop? found = RimOn(
                 vertices, cylinder.BasePoint, cylinder.Axis, _ => cylinder.Radius, cylinder.Radius);
             if (found is not null) return found;
         }
 
-        foreach (var cone in cones)
+        foreach (ConeFit cone in cones)
         {
             // A cone's radius varies along its axis, so the test is against the
             // radius due at that height rather than against one number.
-            var slope = (cone.BottomRadius - cone.TopRadius) / cone.Height;
-            var found = RimOn(
+            double slope = (cone.BottomRadius - cone.TopRadius) / cone.Height;
+            RecipeLoop? found = RimOn(
                 vertices, cone.BasePoint, cone.Axis,
                 height => cone.BottomRadius - slope * height,
                 Math.Max(cone.BottomRadius, cone.TopRadius));
@@ -210,14 +174,14 @@ public static class Reconstructor
     private static RecipeLoop? RimOn(
         List<Vec3> vertices, Vec3 basePoint, Vec3 axis, Func<double, double> radiusAt, double scale)
     {
-        var tolerance = 1e-6 * Math.Max(scale, 1);
-        var heights = new List<double>(vertices.Count);
+        double tolerance = 1e-6 * Math.Max(scale, 1);
+        List<double> heights = new(vertices.Count);
 
-        foreach (var vertex in vertices)
+        foreach (Vec3 vertex in vertices)
         {
-            var offset = vertex - basePoint;
-            var height = offset.Dot(axis);
-            var radial = (offset - axis * height).Length;
+            Vec3 offset = vertex - basePoint;
+            double height = offset.Dot(axis);
+            double radial = (offset - axis * height).Length;
 
             if (Math.Abs(radial - radiusAt(height)) > tolerance) return null;
             heights.Add(height);
@@ -234,11 +198,11 @@ public static class Reconstructor
     /// <summary>Newell normal: points along the direction the loop winds.</summary>
     private static Vec3 WindingNormal(List<Vec3> vertices)
     {
-        var normal = Vec3.Zero;
-        for (var i = 0; i < vertices.Count; i++)
+        Vec3 normal = Vec3.Zero;
+        for (int i = 0; i < vertices.Count; i++)
         {
-            var current = vertices[i];
-            var next = vertices[(i + 1) % vertices.Count];
+            Vec3 current = vertices[i];
+            Vec3 next = vertices[(i + 1) % vertices.Count];
             normal += new Vec3(
                 (current.Y - next.Y) * (current.Z + next.Z),
                 (current.Z - next.Z) * (current.X + next.X),
@@ -253,7 +217,7 @@ public static class Reconstructor
     /// </summary>
     private static List<Diagnostic> Diagnose(MeshTopology topology, BrepRecipe recipe, IndexedMesh mesh)
     {
-        var findings = new List<Diagnostic>();
+        List<Diagnostic> findings = new();
 
         if (topology.BoundaryHalfEdges.Count > 0)
         {

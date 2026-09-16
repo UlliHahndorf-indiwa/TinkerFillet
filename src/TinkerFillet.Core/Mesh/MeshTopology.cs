@@ -27,18 +27,18 @@ public sealed class MeshTopology
         // Group half-edges by the undirected edge they lie on. Direction is
         // deliberately ignored here so that two triangles wound the same way -
         // an inconsistency, not a pairing - are detected rather than matched.
-        var groups = new Dictionary<(int Low, int High), List<int>>(_opposite.Length);
-        for (var halfEdge = 0; halfEdge < _opposite.Length; halfEdge++)
+        Dictionary<(int Low, int High), List<int>> groups = new(_opposite.Length);
+        for (int halfEdge = 0; halfEdge < _opposite.Length; halfEdge++)
         {
-            var from = From(halfEdge);
-            var to = To(halfEdge);
-            var key = from < to ? (from, to) : (to, from);
+            int from = From(halfEdge);
+            int to = To(halfEdge);
+            (int, int) key = from < to ? (from, to) : (to, from);
 
-            if (!groups.TryGetValue(key, out var group)) groups[key] = group = [];
+            if (!groups.TryGetValue(key, out List<int>? group)) groups[key] = group = [];
             group.Add(halfEdge);
         }
 
-        foreach (var group in groups.Values)
+        foreach (List<int> group in groups.Values)
         {
             switch (group.Count)
             {

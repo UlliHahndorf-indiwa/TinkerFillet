@@ -12,11 +12,11 @@ public class FilletSessionTests
     [Fact]
     public async Task EveryStepIsAppliedInOrder()
     {
-        var kernel = new RecordingKernel(EdgeGraphFixtures.Ring(12));
-        var session = new FilletSession(kernel);
-        var features = new[] { FeatureFor(kernel, 0, 1), FeatureFor(kernel, 4, 2) };
+        RecordingKernel kernel = new(EdgeGraphFixtures.Ring(12));
+        FilletSession session = new(kernel);
+        FilletFeature[] features = new[] { FeatureFor(kernel, 0, 1), FeatureFor(kernel, 4, 2) };
 
-        var result = await session.ReplayAsync(AnyRecipe, features, Diagonal);
+        ReplayResult result = await session.ReplayAsync(AnyRecipe, features, Diagonal);
 
         Assert.Equal(2, kernel.Applied.Count);
         Assert.Equal([1, 2], kernel.Applied.Select(call => call.Radius));
@@ -29,15 +29,15 @@ public class FilletSessionTests
         // The behaviour the whole failed-step design exists for: enlarging an
         // early fillet can consume a later edge, and that must cost one step,
         // not the session.
-        var graph = EdgeGraphFixtures.Ring(12);
-        var kernel = new RecordingKernel(graph);
-        var session = new FilletSession(kernel);
+        EdgeGraph graph = EdgeGraphFixtures.Ring(12);
+        RecordingKernel kernel = new(graph);
+        FilletSession session = new(kernel);
 
-        var vanished = FilletFeature.Create(
+        FilletFeature vanished = FilletFeature.Create(
             EdgeSelector.From(EdgeGraphFixtures.OpenRun(3)[1]), radius: 3);
-        var features = new[] { FeatureFor(kernel, 0, 1), vanished, FeatureFor(kernel, 6, 2) };
+        FilletFeature[] features = new[] { FeatureFor(kernel, 0, 1), vanished, FeatureFor(kernel, 6, 2) };
 
-        var result = await session.ReplayAsync(AnyRecipe, features, Diagonal);
+        ReplayResult result = await session.ReplayAsync(AnyRecipe, features, Diagonal);
 
         Assert.Equal(FeatureStatus.Applied, result.Features[0].Status);
         Assert.Equal(FeatureStatus.Failed, result.Features[1].Status);
@@ -48,11 +48,12 @@ public class FilletSessionTests
     [Fact]
     public async Task AStepTheKernelRefusesFailsWithoutStoppingTheRest()
     {
-        var kernel = new RecordingKernel(EdgeGraphFixtures.Ring(12)) { RefuseRadiiAbove = 2.5 };
-        var session = new FilletSession(kernel);
-        var features = new[] { FeatureFor(kernel, 0, 1), FeatureFor(kernel, 4, 9), FeatureFor(kernel, 8, 2) };
+        RecordingKernel kernel = new(EdgeGraphFixtures.Ring(12)) { RefuseRadiiAbove = 2.5 };
+        FilletSession session = new(kernel);
+        FilletFeature[] features =
+            [FeatureFor(kernel, 0, 1), FeatureFor(kernel, 4, 9), FeatureFor(kernel, 8, 2)];
 
-        var result = await session.ReplayAsync(AnyRecipe, features, Diagonal);
+        ReplayResult result = await session.ReplayAsync(AnyRecipe, features, Diagonal);
 
         Assert.Equal(
             [FeatureStatus.Applied, FeatureStatus.Failed, FeatureStatus.Applied],
@@ -65,9 +66,9 @@ public class FilletSessionTests
     {
         // Resolving everything against the original solid would reuse ids that
         // the earlier fillets have already invalidated.
-        var kernel = new RecordingKernel(EdgeGraphFixtures.Ring(12)) { RenumberBy = 3 };
-        var session = new FilletSession(kernel);
-        var feature = FeatureFor(kernel, 5, 1);
+        RecordingKernel kernel = new(EdgeGraphFixtures.Ring(12)) { RenumberBy = 3 };
+        FilletSession session = new(kernel);
+        FilletFeature feature = FeatureFor(kernel, 5, 1);
 
         await session.ReplayAsync(AnyRecipe, [feature, feature with { Id = Guid.NewGuid() }], Diagonal);
 
@@ -80,8 +81,8 @@ public class FilletSessionTests
     public async Task ASelectionIsGrownToItsWholeChainBeforeBeingApplied()
     {
         // The user clicked one segment of a faceted rim; all of it gets rounded.
-        var kernel = new RecordingKernel(EdgeGraphFixtures.Ring(16));
-        var session = new FilletSession(kernel);
+        RecordingKernel kernel = new(EdgeGraphFixtures.Ring(16));
+        FilletSession session = new(kernel);
 
         await session.ReplayAsync(AnyRecipe, [FeatureFor(kernel, 0, 1)], Diagonal);
 
@@ -91,10 +92,10 @@ public class FilletSessionTests
     [Fact]
     public async Task AnEmptyListStillProducesTheBaseSolid()
     {
-        var kernel = new RecordingKernel(EdgeGraphFixtures.Ring(4));
-        var session = new FilletSession(kernel);
+        RecordingKernel kernel = new(EdgeGraphFixtures.Ring(4));
+        FilletSession session = new(kernel);
 
-        var result = await session.ReplayAsync(AnyRecipe, [], Diagonal);
+        ReplayResult result = await session.ReplayAsync(AnyRecipe, [], Diagonal);
 
         Assert.Empty(kernel.Applied);
         Assert.Equal(0, result.State.Handle);
@@ -143,9 +144,9 @@ public class FilletSessionTests
 
         private static EdgeGraph Renumber(EdgeGraph graph, int shift)
         {
-            var count = graph.Edges.Count;
-            var reordered = new List<EdgeInfo>(count);
-            for (var i = 0; i < count; i++)
+            int count = graph.Edges.Count;
+            List<EdgeInfo> reordered = new(count);
+            for (int i = 0; i < count; i++)
                 reordered.Add(graph.Edges[(i + shift) % count] with { Id = i });
             return graph with { Edges = reordered };
         }

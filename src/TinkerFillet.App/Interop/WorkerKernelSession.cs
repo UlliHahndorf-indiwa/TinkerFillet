@@ -30,7 +30,7 @@ internal sealed class WorkerKernelSession : IKernelSession
 
     public async Task<KernelState> ResetAsync(BrepRecipe recipe, CancellationToken cancellationToken = default)
     {
-        var answer = await OccBridge.ResetAsync(JsonSerializer.Serialize(recipe, Json));
+        string answer = await OccBridge.ResetAsync(JsonSerializer.Serialize(recipe, Json));
         return Parse(answer);
     }
 
@@ -39,7 +39,7 @@ internal sealed class WorkerKernelSession : IKernelSession
     {
         try
         {
-            var answer = await OccBridge.FilletAsync(handle, JsonSerializer.Serialize(edgeIds, Json), radius);
+            string answer = await OccBridge.FilletAsync(handle, JsonSerializer.Serialize(edgeIds, Json), radius);
             return Parse(answer);
         }
         // Fully qualified on purpose. There are two types called JSException:
@@ -61,7 +61,7 @@ internal sealed class WorkerKernelSession : IKernelSession
 
     private static KernelState Parse(string json)
     {
-        var answer = JsonSerializer.Deserialize<WorkerAnswer>(json, Json)
+        WorkerAnswer answer = JsonSerializer.Deserialize<WorkerAnswer>(json, Json)
             ?? throw new InvalidOperationException("the CAD worker returned nothing");
 
         return new KernelState(answer.Handle, answer.Graph);
