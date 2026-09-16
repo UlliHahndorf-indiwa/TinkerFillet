@@ -13,6 +13,7 @@ import {
   buildSolid,
   edgeGraph,
   filletEdges,
+  largestWorkingRadius,
 } from "../../src/TinkerFillet.App/wwwroot/js/occ-kernel.js";
 
 const RADIUS = 8;
@@ -295,4 +296,137 @@ test("the two arcs of a rim meet smoothly at the seam", async () => {
   // well inside the thirty at which a chain gives up.
   const turn = 180 - (Math.acos(Math.max(-1, Math.min(1, dot))) * 180) / Math.PI;
   assert.ok(turn < 3, `arcs turn by ${turn.toFixed(2)} degrees where they should carry straight on`);
+});
+
+const cone = (base, axis, bottomRadius, topRadius, height) => ({
+  kind: "Cone",
+  outer: circle(base, axis, bottomRadius),
+  holes: [],
+  surfaceParameters: [...base, ...axis, bottomRadius, topRadius, height],
+});
+
+test("a full cone closes into a solid of the right volume", async () => {
+  const kernel = await OcctKernel.init();
+  const r = 10;
+  const h = 12;
+
+  const solid = buildSolid(kernel, {
+    sewTolerance: 1e-4 * h,
+    faces: [
+      cone([0, 0, 0], [0, 0, 1], r, 0, h),
+      { kind: "Plane", outer: circle([0, 0, 0], [0, 0, -1], r), holes: [], surfaceParameters: [] },
+    ],
+  });
+
+  const expected = (Math.PI * r * r * h) / 3;
+  assert.ok(kernel.isSolid(solid), "expected a solid");
+  assert.ok(
+    Math.abs(kernel.getVolume(solid) - expected) / expected < 1e-9,
+    `volume ${kernel.getVolume(solid)}, expected ${expected}`,
+  );
+});
+
+test("a truncated cone closes into a solid of the right volume", async () => {
+  const kernel = await OcctKernel.init();
+  const r1 = 12;
+  const r2 = 5;
+  const h = 10;
+
+  const solid = buildSolid(kernel, {
+    sewTolerance: 1e-4 * h,
+    faces: [
+      cone([0, 0, 0], [0, 0, 1], r1, r2, h),
+      { kind: "Plane", outer: circle([0, 0, 0], [0, 0, -1], r1), holes: [], surfaceParameters: [] },
+      { kind: "Plane", outer: circle([0, 0, h], [0, 0, 1], r2), holes: [], surfaceParameters: [] },
+    ],
+  });
+
+  const expected = (Math.PI * h * (r1 * r1 + r1 * r2 + r2 * r2)) / 3;
+  assert.ok(
+    Math.abs(kernel.getVolume(solid) - expected) / expected < 1e-9,
+    `volume ${kernel.getVolume(solid)}, expected ${expected}`,
+  );
+});
+
+test("a cone's surface is conical and its base rim is a sharp circle", async () => {
+  const kernel = await OcctKernel.init();
+  const solid = buildSolid(kernel, {
+    sewTolerance: 1e-3,
+    faces: [
+      cone([0, 0, 0], [0, 0, 1], 10, 0, 12),
+      { kind: "Plane", outer: circle([0, 0, 0], [0, 0, -1], 10), holes: [], surfaceParameters: [] },
+    ],
+  });
+
+  const kinds = kernel.getSubShapes(solid, "face").map((face) => kernel.surfaceType(face));
+  assert.ok(kinds.includes("cone"), `got ${kinds.join(", ")}`);
+
+  const rims = edgeGraph(kernel, solid).edges.filter((edge) => edge.faces.length === 2);
+  for (const rim of rims) {
+    assert.equal(rim.curveKind, "circle");
+    assert.equal(rim.convex, true);
+  }
+});
+
+test("a cone's base rim can be rounded, and the limit is found rather than guessed", async () => {
+  // A cone's base meets its side at about 130 degrees rather than 90, so much
+  // less room is available than on a cylinder of the same size: past roughly
+  // 1.27 mm nothing fits. That is precisely the case the radius search exists
+  // for - the kernel says no without saying how much would have worked.
+  const kernel = await OcctKernel.init();
+  const solid = buildSolid(kernel, {
+    sewTolerance: 1e-3,
+    faces: [
+      cone([0, 0, 0], [0, 0, 1], 10, 0, 12),
+      { kind: "Plane", outer: circle([0, 0, 0], [0, 0, -1], 10), holes: [], surfaceParameters: [] },
+    ],
+  });
+  const before = kernel.getVolume(solid);
+  const rim = edgeGraph(kernel, solid).edges.find((edge) => edge.faces.length === 2);
+
+  const filleted = filletEdges(kernel, solid, [rim.id], 1);
+
+  const removed = before - kernel.getVolume(filleted);
+  assert.ok(removed > 0 && removed < before * 0.2, `removed ${removed} of ${before}`);
+  // Two faces become four: the blend is split at the cone's seam, just as the
+  // rim it replaces was.
+  assert.equal(kernel.getSubShapes(filleted, "face").length, 4);
+
+  assert.throws(() => filletEdges(kernel, solid, [rim.id], 3));
+  const largest = largestWorkingRadius(kernel, solid, [rim.id], 3);
+  assert.ok(largest > 1 && largest < 3, `largest working radius ${largest}`);
+  assert.doesNotThrow(() => filletEdges(kernel, solid, [rim.id], largest));
+});
+
+test("a cone whose top radius is not smaller than its bottom is refused", async () => {
+  const kernel = await OcctKernel.init();
+
+  assert.throws(
+    () => buildSolid(kernel, { sewTolerance: 1e-3, faces: [cone([0, 0, 0], [0, 0, 1], 5, 5, 10)] }),
+    /top radius below its bottom one/,
+  );
+});
+
+test("a cone whose tip is a whisker above zero is still built", async () => {
+  // What a fitted full cone actually produces. The least-squares apex sits a
+  // hair off the one in the mesh, so the tip radius comes out as something like
+  // 1e-9 rather than 0 - positive, but far too small for the kernel to accept.
+  // Only the whole pipeline showed this; every test until now passed an exact
+  // zero.
+  const kernel = await OcctKernel.init();
+  const r = 12;
+
+  const solid = buildSolid(kernel, {
+    sewTolerance: 1e-3,
+    faces: [
+      cone([0, 0, 0], [0, 0, 1], r, 1e-9, 18),
+      { kind: "Plane", outer: circle([0, 0, 0], [0, 0, -1], r), holes: [], surfaceParameters: [] },
+    ],
+  });
+
+  const expected = (Math.PI * r * r * 18) / 3;
+  assert.ok(
+    Math.abs(kernel.getVolume(solid) - expected) / expected < 1e-9,
+    `volume ${kernel.getVolume(solid)}, expected ${expected}`,
+  );
 });

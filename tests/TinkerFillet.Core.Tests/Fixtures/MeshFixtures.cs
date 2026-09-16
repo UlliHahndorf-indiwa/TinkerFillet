@@ -202,6 +202,50 @@ public static class MeshFixtures
         return new TriangleSoup([.. triangles]);
     }
 
+    /// <summary>
+    /// A tessellated cone, or a truncated one when <paramref name="topRadius"/>
+    /// is positive.
+    ///
+    /// Its side facets fan out from a common apex instead of running parallel,
+    /// which is what separates cone recovery from cylinder recovery: the shared
+    /// edges converge rather than staying parallel. With a top radius the apex
+    /// is not even in the mesh - it has to be inferred from where those edges
+    /// would meet.
+    /// </summary>
+    public static TriangleSoup Cone(
+        int sides = 24, double bottomRadius = 10, double topRadius = 0, double height = 12)
+    {
+        var triangles = new List<double>();
+
+        Vec3 On(double radius, int index, double z)
+        {
+            var angle = 2 * Math.PI * index / sides;
+            return new Vec3(radius * Math.Cos(angle), radius * Math.Sin(angle), z);
+        }
+
+        for (var i = 0; i < sides; i++)
+        {
+            var next = (i + 1) % sides;
+
+            if (topRadius <= 0)
+            {
+                AppendTriangle(triangles, On(bottomRadius, i, 0), On(bottomRadius, next, 0), new Vec3(0, 0, height));
+            }
+            else
+            {
+                AppendQuad(triangles,
+                    On(bottomRadius, i, 0), On(bottomRadius, next, 0),
+                    On(topRadius, next, height), On(topRadius, i, height));
+                AppendTriangle(triangles,
+                    new Vec3(0, 0, height), On(topRadius, i, height), On(topRadius, next, height));
+            }
+
+            AppendTriangle(triangles, new Vec3(0, 0, 0), On(bottomRadius, next, 0), On(bottomRadius, i, 0));
+        }
+
+        return new TriangleSoup([.. triangles]);
+    }
+
     /// <summary>A single triangle: the simplest mesh with an open boundary.</summary>
     public static TriangleSoup SingleTriangle()
     {

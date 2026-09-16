@@ -17,6 +17,7 @@ public sealed class ReconstructionResult
     public required RegionSet Regions { get; init; }
     public required IReadOnlyList<RegionLoops> Loops { get; init; }
     public required IReadOnlyList<CylinderFit> Cylinders { get; init; }
+    public required IReadOnlyList<ConeFit> Cones { get; init; }
     public required IReadOnlyList<Diagnostic> Diagnostics { get; init; }
 }
 
@@ -38,17 +39,23 @@ public static class Reconstructor
         var topology = MeshTopology.Build(mesh);
         var regions = RegionGrower.Grow(topology, RegionOptions.ForModel(mesh));
         var loops = LoopExtractor.Extract(topology, regions, LoopOptions.Default);
-        var cylinders = PrimitiveFitter.FindCylinders(topology, regions, fitting ?? FittingOptions.Default);
+        var options = fitting ?? FittingOptions.Default;
+        var cylinders = PrimitiveFitter.FindCylinders(topology, regions, options);
+        var cones = PrimitiveFitter.FindCones(
+            topology, regions, options, [.. cylinders.SelectMany(cylinder => cylinder.RegionIndices)]);
+
+        var recipe = BuildRecipe(mesh, loops, cylinders, cones, SewTolerance(mesh));
 
         return new ReconstructionResult
         {
-            Recipe = BuildRecipe(mesh, loops, cylinders, SewTolerance(mesh)),
+            Recipe = recipe,
             Mesh = mesh,
             Topology = topology,
             Regions = regions,
             Loops = loops,
             Cylinders = cylinders,
-            Diagnostics = Diagnose(topology, regions, mesh),
+            Cones = cones,
+            Diagnostics = Diagnose(topology, recipe, mesh),
         };
     }
 
@@ -59,15 +66,22 @@ public static class Reconstructor
         IndexedMesh mesh,
         IReadOnlyList<RegionLoops> loops,
         IReadOnlyList<CylinderFit> cylinders,
+        IReadOnlyList<ConeFit> cones,
         double sewTolerance)
     {
         var faces = new List<RecipeFace>(loops.Count);
-        var absorbed = cylinders.SelectMany(cylinder => cylinder.RegionIndices).ToHashSet();
+        var absorbed = cylinders.SelectMany(cylinder => cylinder.RegionIndices)
+            .Concat(cones.SelectMany(cone => cone.RegionIndices))
+            .ToHashSet();
 
-        // One cylindrical face replaces the whole fan of strips it was fitted
-        // to. Its own boundary is implied by the surface and its height.
+        // One curved face replaces the whole fan of facets it was fitted to.
+        // Its own boundary is implied by the surface and its extent.
         foreach (var cylinder in cylinders)
             faces.Add(RecipeFace.Cylinder(cylinder.BasePoint, cylinder.Axis, cylinder.Radius, cylinder.Height));
+
+        foreach (var cone in cones)
+            faces.Add(RecipeFace.Cone(
+                cone.BasePoint, cone.Axis, cone.BottomRadius, cone.TopRadius, cone.Height));
 
         foreach (var face in loops)
         {
@@ -75,8 +89,8 @@ public static class Reconstructor
 
             faces.Add(new RecipeFace(
                 Kind: SurfaceKind.Plane,
-                Outer: ToRecipeLoop(mesh, face.Outer, cylinders),
-                Holes: [.. face.Holes.Select(hole => ToRecipeLoop(mesh, hole, cylinders))],
+                Outer: ToRecipeLoop(mesh, face.Outer, cylinders, cones),
+                Holes: [.. face.Holes.Select(hole => ToRecipeLoop(mesh, hole, cylinders, cones))],
                 SurfaceParameters: []));
         }
 
@@ -91,7 +105,8 @@ public static class Reconstructor
     /// while the face beside it keeps a twenty-segment outline, the two no
     /// longer meet and sewing fails.
     /// </summary>
-    private static RecipeLoop ToRecipeLoop(IndexedMesh mesh, Loop loop, IReadOnlyList<CylinderFit> cylinders)
+    private static RecipeLoop ToRecipeLoop(
+        IndexedMesh mesh, Loop loop, IReadOnlyList<CylinderFit> cylinders, IReadOnlyList<ConeFit> cones)
     {
         var points = new double[loop.Vertices.Count * 3];
         for (var i = 0; i < loop.Vertices.Count; i++)
@@ -102,42 +117,64 @@ public static class Reconstructor
             points[i * 3 + 2] = vertex.Z;
         }
 
-        var circle = AsRimOf(mesh, loop, cylinders);
+        var circle = AsRimOf(mesh, loop, cylinders, cones);
         return circle ?? RecipeLoop.Polygon(points);
     }
 
-    private static RecipeLoop? AsRimOf(IndexedMesh mesh, Loop loop, IReadOnlyList<CylinderFit> cylinders)
+    private static RecipeLoop? AsRimOf(
+        IndexedMesh mesh, Loop loop, IReadOnlyList<CylinderFit> cylinders, IReadOnlyList<ConeFit> cones)
     {
         if (loop.Vertices.Count < 3) return null;
         var vertices = loop.Vertices.Select(mesh.Vertex).ToList();
 
         foreach (var cylinder in cylinders)
         {
-            var tolerance = 1e-6 * Math.Max(cylinder.Radius, 1);
-            var heights = new List<double>();
-            var onRim = true;
+            var found = RimOn(
+                vertices, cylinder.BasePoint, cylinder.Axis, _ => cylinder.Radius, cylinder.Radius);
+            if (found is not null) return found;
+        }
 
-            foreach (var vertex in vertices)
-            {
-                var offset = vertex - cylinder.BasePoint;
-                var height = offset.Dot(cylinder.Axis);
-                var radial = (offset - cylinder.Axis * height).Length;
-
-                if (Math.Abs(radial - cylinder.Radius) > tolerance) { onRim = false; break; }
-                heights.Add(height);
-            }
-
-            if (!onRim || heights.Max() - heights.Min() > tolerance) continue;
-
-            // The winding is what tells the kernel an outline from a hole, and
-            // the loop already carries it in its vertex order.
-            return RecipeLoop.Circle(
-                cylinder.BasePoint + cylinder.Axis * heights[0],
-                WindingNormal(vertices),
-                cylinder.Radius);
+        foreach (var cone in cones)
+        {
+            // A cone's radius varies along its axis, so the test is against the
+            // radius due at that height rather than against one number.
+            var slope = (cone.BottomRadius - cone.TopRadius) / cone.Height;
+            var found = RimOn(
+                vertices, cone.BasePoint, cone.Axis,
+                height => cone.BottomRadius - slope * height,
+                Math.Max(cone.BottomRadius, cone.TopRadius));
+            if (found is not null) return found;
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The circle this loop traces on the given surface of revolution, or null
+    /// when it does not lie on one.
+    /// </summary>
+    private static RecipeLoop? RimOn(
+        List<Vec3> vertices, Vec3 basePoint, Vec3 axis, Func<double, double> radiusAt, double scale)
+    {
+        var tolerance = 1e-6 * Math.Max(scale, 1);
+        var heights = new List<double>(vertices.Count);
+
+        foreach (var vertex in vertices)
+        {
+            var offset = vertex - basePoint;
+            var height = offset.Dot(axis);
+            var radial = (offset - axis * height).Length;
+
+            if (Math.Abs(radial - radiusAt(height)) > tolerance) return null;
+            heights.Add(height);
+        }
+
+        if (heights.Max() - heights.Min() > tolerance) return null;
+
+        // The winding is what tells the kernel an outline from a hole, and the
+        // loop already carries it in its vertex order.
+        return RecipeLoop.Circle(
+            basePoint + axis * heights[0], WindingNormal(vertices), radiusAt(heights[0]));
     }
 
     /// <summary>Newell normal: points along the direction the loop winds.</summary>
@@ -160,7 +197,7 @@ public static class Reconstructor
     /// Findings are reported, never acted on. Whether a warning is worth
     /// stopping for is the user's call, so a recipe is produced either way.
     /// </summary>
-    private static List<Diagnostic> Diagnose(MeshTopology topology, RegionSet regions, IndexedMesh mesh)
+    private static List<Diagnostic> Diagnose(MeshTopology topology, BrepRecipe recipe, IndexedMesh mesh)
     {
         var findings = new List<Diagnostic>();
 
@@ -182,12 +219,15 @@ public static class Reconstructor
                 "or disagreeing winding - no solid can have that"));
         }
 
-        if (mesh.TriangleCount > 0 && regions.Regions.Count > NotCadLikeRatio * mesh.TriangleCount)
+        // Counted after the cylinders and cones have been recovered, not
+        // before. A tessellated cone starts out as one region per facet and
+        // would otherwise be reported as organic when it is nothing of the kind.
+        if (mesh.TriangleCount > 0 && recipe.Faces.Count > NotCadLikeRatio * mesh.TriangleCount)
         {
             findings.Add(new Diagnostic(
                 DiagnosticKind.NotCadLike,
-                regions.Regions.Count,
-                $"{regions.Regions.Count} faces were recovered from {mesh.TriangleCount} triangles, " +
+                recipe.Faces.Count,
+                $"{recipe.Faces.Count} faces were recovered from {mesh.TriangleCount} triangles, " +
                 "so almost nothing merged - this looks like an organic or scanned model rather than " +
                 "CAD geometry, and fillet quality will be poor"));
         }

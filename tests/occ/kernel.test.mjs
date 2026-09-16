@@ -272,11 +272,11 @@ test("a recipe with no faces is refused", async () => {
 });
 
 test("an unsupported surface kind is refused rather than flattened", async () => {
-  // Cones are not recovered yet. Silently treating one as its boundary polygon
+  // Spheres are not recovered. Silently treating one as its boundary polygon
   // would produce a shape that looks plausible and is wrong.
   const kernel = await OcctKernel.init();
   const recipe = cubeRecipe();
-  recipe.faces[0].kind = "Cone";
+  recipe.faces[0].kind = "Sphere";
 
   assert.throws(() => buildSolid(kernel, recipe), /not supported/);
 });

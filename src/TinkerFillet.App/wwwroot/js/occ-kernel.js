@@ -45,6 +45,7 @@ export function buildSolid(kernel, recipe) {
     const kind = String(face.kind).toLowerCase();
 
     if (kind === "cylinder") return cylindricalFace(kernel, face.surfaceParameters, index);
+    if (kind === "cone") return conicalFace(kernel, face.surfaceParameters, index);
     if (kind !== "plane") throw new Error(`face ${index}: surface kind '${face.kind}' is not supported`);
 
     let built = kernel.makeFace(wireFromLoop(kernel, face.outer, index));
@@ -88,8 +89,40 @@ function cylindricalFace(kernel, parameters, faceIndex) {
 }
 
 /**
- * Row-major 3x4 affine taking the unit cylinder - axis +Z, base at the origin -
- * onto the given axis and base point.
+ * The lateral surface of a cone, full or truncated, placed on the given axis.
+ *
+ * Same idea as the cylinder: take the surface off a whole cone, which already
+ * carries exactly the rims the neighbouring flat faces were given.
+ */
+function conicalFace(kernel, parameters, faceIndex) {
+  if (parameters?.length !== 9) {
+    throw new Error(`face ${faceIndex}: a cone needs 9 parameters, got ${parameters?.length}`);
+  }
+
+  const [bx, by, bz, ax, ay, az, bottomRadius, rawTopRadius, height] = parameters;
+  if (!(bottomRadius > 0) || !(height > 0) || rawTopRadius < 0 || rawTopRadius >= bottomRadius) {
+    throw new Error(
+      `face ${faceIndex}: a cone needs a positive height and a top radius below its bottom one, ` +
+      `got ${bottomRadius}, ${rawTopRadius}, ${height}`,
+    );
+  }
+
+  // The kernel refuses a radius that is positive but vanishingly small, which is
+  // what a fitted full cone's tip comes out as. Anything that fine is a point.
+  const topRadius = rawTopRadius < 1e-6 * bottomRadius ? 0 : rawTopRadius;
+
+  const solid = kernel.makeCone(bottomRadius, topRadius, height);
+  const lateral = kernel
+    .getSubShapes(solid, "face")
+    .find((face) => kernel.surfaceType(face) === "cone");
+  if (!lateral) throw new Error(`face ${faceIndex}: the kernel produced no conical surface`);
+
+  return kernel.transform(lateral, placement({ x: bx, y: by, z: bz }, { x: ax, y: ay, z: az }));
+}
+
+/**
+ * Row-major 3x4 affine taking a shape built along +Z from the origin onto the
+ * given axis and base point.
  */
 function placement(base, axis) {
   const w = normalize(axis);

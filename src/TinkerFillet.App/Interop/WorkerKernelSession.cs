@@ -1,4 +1,3 @@
-using Microsoft.JSInterop;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -43,7 +42,12 @@ internal sealed class WorkerKernelSession : IKernelSession
             var answer = await OccBridge.FilletAsync(handle, JsonSerializer.Serialize(edgeIds, Json), radius);
             return Parse(answer);
         }
-        catch (JSException error)
+        // Fully qualified on purpose. There are two types called JSException:
+        // Microsoft.JSInterop.JSException, which IJSRuntime throws, and this
+        // one, which is what [JSImport] throws. Catching the other compiles
+        // perfectly and catches nothing, so every refused fillet escaped as an
+        // unhandled error instead of being reported to the user.
+        catch (System.Runtime.InteropServices.JavaScript.JSException error)
         {
             // The worker prefixes the kernel's own code, so a radius that will
             // not fit is distinguishable from a fault in our plumbing. Only the

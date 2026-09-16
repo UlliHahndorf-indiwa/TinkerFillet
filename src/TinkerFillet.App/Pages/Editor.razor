@@ -103,9 +103,11 @@
 
     private static string Summary(ReconstructionResult model)
     {
-        var rounded = model.Cylinders.Count == 0
-            ? ""
-            : $", davon {model.Cylinders.Count} als Zylinder erkannt";
+        var recovered = new List<string>();
+        if (model.Cylinders.Count > 0) recovered.Add($"{model.Cylinders.Count} Zylinder");
+        if (model.Cones.Count > 0) recovered.Add($"{model.Cones.Count} Kegel");
+
+        var rounded = recovered.Count == 0 ? "" : $", darunter {string.Join(" und ", recovered)}";
         return $"{model.Mesh.TriangleCount} Dreiecke zu {model.Recipe.Faces.Count} Flächen "
              + $"zusammengefasst{rounded}.";
     }
@@ -209,7 +211,8 @@
                     + "Kante erneut anklicken, um sie zu ersetzen.", kind: "replay");
             }
         }
-        catch (JSException error)
+        // The [JSImport] flavour, not the IJSRuntime one - see WorkerKernelSession.
+        catch (System.Runtime.InteropServices.JavaScript.JSException error)
         {
             // The worker can be taken down by the kernel rather than return an
             // error. Nothing is lost - the recipe and the list are here - so a

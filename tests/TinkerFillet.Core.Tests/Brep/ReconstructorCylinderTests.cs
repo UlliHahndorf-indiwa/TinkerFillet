@@ -142,6 +142,58 @@ public class ReconstructorCylinderTests
         Assert.Equal(1, Math.Abs(parameters[5]), 6); // axis is +/- Z
         Assert.Equal(height, parameters[7], 6);
     }
+
+    [Fact]
+    public void AFacetedConeBecomesOneConicalFaceAndItsBase()
+    {
+        var result = Reconstructor.Reconstruct(MeshFixtures.Cone(sides: 24, bottomRadius: 10, height: 12));
+
+        Assert.Equal(2, result.Recipe.Faces.Count);
+        Assert.Single(result.Recipe.Faces, face => face.Kind == SurfaceKind.Cone);
+
+        var cap = result.Recipe.Faces.Single(face => face.Kind == SurfaceKind.Plane);
+        Assert.Equal(LoopKind.Circle, cap.Outer.Kind);
+        Assert.Equal(10, cap.CircleParametersOf(cap.Outer).Radius, 6);
+    }
+
+    [Fact]
+    public void ConeParametersReachTheRecipe()
+    {
+        var result = Reconstructor.Reconstruct(
+            MeshFixtures.Cone(sides: 24, bottomRadius: 12, topRadius: 5, height: 10));
+
+        var parameters = result.Recipe.Faces.Single(face => face.Kind == SurfaceKind.Cone).SurfaceParameters;
+
+        Assert.Equal(9, parameters.Length);
+        Assert.Equal(12, parameters[6], 6); // bottom radius
+        Assert.Equal(5, parameters[7], 6);  // top radius
+        Assert.Equal(10, parameters[8], 6); // height
+    }
+
+    [Fact]
+    public void ATruncatedConeGetsCirclesAtBothEnds()
+    {
+        var result = Reconstructor.Reconstruct(
+            MeshFixtures.Cone(sides: 24, bottomRadius: 12, topRadius: 5, height: 10));
+
+        var caps = result.Recipe.Faces.Where(face => face.Kind == SurfaceKind.Plane).ToList();
+
+        Assert.Equal(2, caps.Count);
+        var radii = caps.Select(cap => cap.CircleParametersOf(cap.Outer).Radius).Order().ToList();
+        Assert.Equal(5, radii[0], 6);
+        Assert.Equal(12, radii[1], 6);
+    }
+
+    [Fact]
+    public void ACylinderIsStillRecoveredAsACylinderRatherThanAFlatCone()
+    {
+        // One shape cannot be both, and a cylinder's strips would otherwise be a
+        // fan whose apex is infinitely far away.
+        var result = Reconstructor.Reconstruct(MeshFixtures.Prism(sides: 24));
+
+        Assert.Single(result.Cylinders);
+        Assert.Empty(result.Cones);
+    }
 }
 
 file static class RecipeFaceExtensions

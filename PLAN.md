@@ -502,9 +502,57 @@ rechnet → bereit, dazu die Fehlerzustände.
 
 ---
 
-## Stufe 2 — Primitiv-Erkennung
+## Stufe 2 — Primitiv-Erkennung ✅ abgeschlossen
 
-Ziel: Lochränder und Zylinderkanten exakt statt facettiert.
+Ziel: Lochränder und Zylinderkanten exakt statt facettiert. **Erreicht**, Kegel
+inklusive.
+
+Am laufenden Programm nachgewiesen:
+
+| Modell | Vorher (Stufe 1) | Nachher |
+|---|---|---|
+| Scheibe mit Bohrung, 192 Dreiecke | 50 Flächen | **4 Flächen, 2 Zylinder** |
+| Prisma 20-seitig, 80 Dreiecke | 22 Flächen | **3 Flächen, 1 Zylinder** |
+| Kegel, 48 Dreiecke | 26 Flächen | **2 Flächen, 1 Kegel** |
+| Kegelstumpf, 96 Dreiecke | 27 Flächen | **3 Flächen, 1 Kegel** |
+| Würfel, 192 Dreiecke | 6 Flächen | 6 Flächen (unverändert) |
+
+Ein Klick auf einen Rand wählt jetzt **2 Segmente** statt 20 oder 24 — der Rand
+ist eine echte Kreiskante, die der Kernel nur an der Flächennaht teilt.
+Verrundung am Außenrand der Scheibe: entfernt 59,557 gegen Pappus-Vorhersage
+59,661.
+
+Tests: 146 xUnit + 39 node, alle grün.
+
+### Vier Fehler, die diese Stufe aufgedeckt hat
+
+1. **Konvexität war falsch berechnet** — sie maß die Richtung zum
+   Flächenschwerpunkt, der bei einem Kreisring aber mitten im Loch liegt. Jeder
+   Bohrungsrand kam als konkav heraus, obwohl alle konvex sind. Zwei Tests
+   trugen denselben Denkfehler mit und waren deshalb grün. Jetzt wird gemessen,
+   wie viel Material die Kante umgibt.
+2. **Knickmessung nutzte die Sehne** zum Kantenmittelpunkt. Bei einer Geraden
+   ist das die Tangente, bei einem Dreiviertelbogen 90° daneben — Ketten
+   brachen an jeder Naht ab. Kanten melden jetzt ihre Endtangenten.
+3. **Der Kegel-Fitter fraß die Kugel.** Jede ringweise tessellierte
+   Rotationsfläche zerfällt in Kegelstümpfe, weil ein Kegel durch zwei Kreise
+   deren Ecken exakt trifft. Ein Kegel muss jetzt an einer echten Kante enden.
+4. **Zwei Typen namens `JSException`.** `[JSImport]` wirft den aus
+   `System.Runtime.InteropServices.JavaScript`, gefangen wurde der aus
+   `Microsoft.JSInterop`. Kompiliert sauber, fängt nichts — jeder abgelehnte
+   Fillet flog als ungefangene Ausnahme durch, statt den Schritt zu markieren.
+
+### Bekannte Grenzen
+
+- Nur **volle** Zylinder und Kegel (360°). Teilfächer — eine verrundete Ecke,
+  eine durch eine Fläche unterbrochene Wand — bleiben die Ebenen, die sie sind.
+- Kugeln und Tori werden nicht erkannt.
+- Ein Sechskantprisma und ein grob tessellierter Zylinder sind in der Datei
+  nicht unterscheidbar. Der Schwellwert steht als Regler in der Toolbar.
+
+---
+
+## Stufe 2 — Umsetzung
 
 Ohne diesen Schritt besteht ein Tinkercad-Lochrand aus N Einzelkanten; der
 Fillet darauf ist langsam, fragil und facettiert. Mit Erkennung ist der

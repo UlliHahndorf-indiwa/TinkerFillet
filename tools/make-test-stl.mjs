@@ -144,3 +144,27 @@ function washer(sides = 24, outerRadius = 20, holeRadius = 8, thickness = 6) {
 }
 
 writeBinaryStl(join(out, "washer.stl"), washer());
+
+/** Tessellated cone and truncated cone: fans whose side edges converge. */
+function coneShape(sides = 24, bottomRadius = 12, topRadius = 0, height = 18) {
+  const on = (r, i, z) => {
+    const a = (2 * Math.PI * i) / sides;
+    return [r * Math.cos(a), r * Math.sin(a), z];
+  };
+  const triangles = [];
+  for (let i = 0; i < sides; i++) {
+    const j = (i + 1) % sides;
+    if (topRadius <= 0) {
+      add(triangles, on(bottomRadius, i, 0), on(bottomRadius, j, 0), [0, 0, height]);
+    } else {
+      quad(triangles, on(bottomRadius, i, 0), on(bottomRadius, j, 0),
+        on(topRadius, j, height), on(topRadius, i, height));
+      add(triangles, [0, 0, height], on(topRadius, i, height), on(topRadius, j, height));
+    }
+    add(triangles, [0, 0, 0], on(bottomRadius, j, 0), on(bottomRadius, i, 0));
+  }
+  return triangles;
+}
+
+writeBinaryStl(join(out, "cone.stl"), coneShape());
+writeBinaryStl(join(out, "cone-truncated.stl"), coneShape(24, 14, 6, 15));

@@ -9,6 +9,9 @@ public enum SurfaceKind
 
     /// <summary>Recovered from a fan of facets by the primitive fitter.</summary>
     Cylinder,
+
+    /// <summary>Recovered likewise, from a fan whose shared edges converge.</summary>
+    Cone,
 }
 
 public enum LoopKind
@@ -63,6 +66,15 @@ public sealed record RecipeFace(
         RecipeLoop.Circle(basePoint, axis, radius),
         [],
         [basePoint.X, basePoint.Y, basePoint.Z, axis.X, axis.Y, axis.Z, radius, height]);
+
+    /// <param name="basePoint">The wider end, which is where the kernel builds a cone from.</param>
+    /// <param name="topRadius">Zero for a full cone.</param>
+    public static RecipeFace Cone(
+        Vec3 basePoint, Vec3 axis, double bottomRadius, double topRadius, double height) => new(
+        SurfaceKind.Cone,
+        RecipeLoop.Circle(basePoint, axis, bottomRadius),
+        [],
+        [basePoint.X, basePoint.Y, basePoint.Z, axis.X, axis.Y, axis.Z, bottomRadius, topRadius, height]);
 }
 
 /// <summary>
