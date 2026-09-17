@@ -19,12 +19,11 @@
 }
 
 .toolbar .logo {
-    width: 1.75rem;
+    /* The file's own dimensions are on the element so the toolbar does not
+       jump while it loads; these two decide what is actually shown. */
+    width: auto;
     height: 1.75rem;
-    flex: none; /* an empty element in a flex row is squashed to nothing */
-    /* Resolved against the bundled stylesheet at the site root, so it follows
-       the <base href> wherever the site is served from. */
-    background: url('logo.png') center / contain no-repeat;
+    flex: none;
 }
 
 .toolbar strong {
