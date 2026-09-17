@@ -1001,16 +1001,27 @@ Erkennung, ob der Host die Datei bereits ausgepackt hat. Für ein Werkzeug, das
 einmal geladen und danach aus dem Cache gestartet wird, ist das zu viel
 Maschinerie. Der Hebel bleibt notiert, falls der erste Ladevorgang stört.
 
-**Offen bis zum ersten Deployment:** ob GitHub Pages `application/wasm`
-komprimiert ausliefert. Die vom Publish erzeugten `.br`/`.gz`-Dateien nutzt
-Pages nicht — es komprimiert selbst oder gar nicht. Davon hängen beim ersten
-Besuch 21 MB gegen 7 MB ab. In den Entwicklerwerkzeugen an einer einzigen
-Antwortkopfzeile ablesbar, sobald die Seite steht.
+**Am ersten Deployment beantwortet:** GitHub Pages komprimiert
+`application/wasm`. Die Antwort auf `occt-wasm.wasm` trägt
+`Content-Encoding: gzip` und ist 7.140.095 Byte lang — 6,8 MB statt 21,2 MB.
+Die vom Publish erzeugten `.br`/`.gz`-Dateien daneben nutzt Pages dabei nicht,
+es komprimiert selbst. Damit erledigt sich der oben verworfene
+`DecompressionStream`-Umweg endgültig: er würde nichts mehr sparen.
 
 ### 3.3 PWA / Offline / Deployment
 Blazor-PWA-Vorlage, Service Worker cacht .NET-Runtime, App und OCC-WASM.
 Statisches Deployment auf GitHub Pages über `.github/workflows/deploy.yml`:
 Tests, Publish, Artefakt, `deploy-pages`.
+
+Die Seite läuft unter einer eigenen Domain und damit an deren Wurzel.
+`<base href="/" />` aus der Quelle bleibt deshalb stehen; der Workflow schreibt
+nichts um. Der Domainname steht zusätzlich als `CNAME` in der Ausgabe — in den
+Repository-Einstellungen ist er gesetzt, und die Datei ist das, was ein
+Deployment daran hindert, die Einstellung zu löschen.
+
+Fiele die Domain weg, läge die Seite wieder unter
+`<Konto>.github.io/<Repo>/`, und dann müsste `<base href>` vor dem Publish auf
+diesen Ordner gesetzt werden. Die Stelle dafür ist im Workflow beschrieben.
 
 Drei bekannte Stolperfallen, die eingeplant sind:
 - Das Repo muss **öffentlich** sein. GitHub Free liefert keine Pages aus

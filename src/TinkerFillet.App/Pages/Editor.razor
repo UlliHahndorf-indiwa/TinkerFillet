@@ -6,6 +6,9 @@
 <div class="editor" tabindex="0" @onkeydown="OnKeyDown">
 
     <header class="toolbar">
+        @* Drawn as a background rather than an <img>, so a missing file leaves
+           a gap instead of a broken-image icon. *@
+        <span class="logo" role="img" aria-label="Porcino3D"></span>
         <strong>TinkerFillet</strong>
 
         <label class="file">
@@ -60,6 +63,14 @@
                          OnUndo="OnUndo"
                          OnRedo="OnRedo" />
         }
+
+        @* @@ is Razor's escape for a literal @ - without it the rest of the
+           address would be read as an expression. *@
+        <p class="credit">
+            &copy; 2026 by
+            <a href="https://makerworld.com/de/@@ulli_hahndorf"
+               target="_blank" rel="noopener">Porcino3D</a>
+        </p>
     </aside>
 
     <RadiusDialog Visible="_chain is not null"
