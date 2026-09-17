@@ -42,7 +42,8 @@ spike/
 # Generated sample models for manual trials (tools/make-test-stl.mjs).
 src/TinkerFillet.App/wwwroot/dev/
 
-# Design notes and readme: kept locally, not published with the code.
-# They are still in the history of earlier commits - see git log.
+# Working documents: kept locally, not published with the code. They are still
+# in the history of earlier commits - see git log.
 /PLAN.md
-/README.md
+/Request.md
+/code-styleguide.md
