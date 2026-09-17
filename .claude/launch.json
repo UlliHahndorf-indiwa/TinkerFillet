@@ -20,7 +20,7 @@
         "E:/Web/TinkerFillet/tools/serve-publish.mjs",
         "E:/Web/TinkerFillet/artifacts/pages/wwwroot",
         "--base",
-        "/TinkerFillet/",
+        "/",
         "--port",
         "5099"
       ],

@@ -45,19 +45,14 @@ jobs:
       - name: Test the CAD kernel layer
         run: node --test "tests/occ/*.test.mjs"
 
-      # The site is served from https://<owner>.github.io/<repository>/, so the
-      # base has to name that folder. Written into the source before publishing
-      # rather than into the output afterwards: the integrity hashes in
-      # service-worker-assets.js are taken from the published files, and editing
-      # one of them after the fact breaks the offline cache on first install.
-      - name: Point the application at its subfolder
-        run: |
-          set -e
-          page="src/TinkerFillet.App/wwwroot/index.html"
-          grep -q '<base href="/" />' "$page"
-          sed -i 's|<base href="/" />|<base href="/${{ github.event.repository.name }}/" />|' "$page"
-          grep '<base href=' "$page"
-
+      # The site has its own domain and is served from its root, so the
+      # <base href="/" /> in the source is already right and nothing rewrites
+      # it. Were the domain ever dropped, GitHub would serve the site from
+      # <owner>.github.io/<repository>/ instead, and this is where the base
+      # would have to be pointed at that folder - before publishing, never
+      # after: the integrity hashes in service-worker-assets.js are taken from
+      # the published files, and editing one afterwards breaks the offline
+      # cache on first install.
       - name: Publish
         run: dotnet publish src/TinkerFillet.App/TinkerFillet.App.csproj --configuration Release --output publish
 
@@ -75,6 +70,12 @@ jobs:
       # service-worker-assets.js and has to stay exactly as it was published.
       - name: Answer unknown addresses with the application
         run: cp publish/wwwroot/index.html publish/wwwroot/404.html
+
+      # The domain is configured in the repository settings; this file states it
+      # in the repository as well, which is what keeps a deployment from
+      # clearing the setting.
+      - name: Name the domain
+        run: echo 'tinkerfillet.steinpilz42.de' > publish/wwwroot/CNAME
 
       - uses: actions/upload-pages-artifact@v3
         with:
