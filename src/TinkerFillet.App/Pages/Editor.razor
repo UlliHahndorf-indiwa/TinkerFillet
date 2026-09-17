@@ -31,20 +31,6 @@
         <button @onclick="Export" disabled="@(_model is null || _busy)">STL exportieren</button>
     </header>
 
-    <div class="stage">
-        <canvas id="viewport" @onmousemove="OnMouseMove" @onclick="OnClick"></canvas>
-
-        @if (_model is null && !_busy)
-        {
-            <div class="empty">
-                <p>STL-Datei laden, Kante anklicken, Radius eingeben.</p>
-                <p class="hint">Die Datei bleibt im Browser und wird nirgendwohin übertragen.</p>
-            </div>
-        }
-
-        <ProgressPanel Visible="_busy" Message="@_busyMessage" Step="_busyStep" Steps="_busySteps" />
-    </div>
-
     <aside class="side">
         @foreach (Note note in _notes)
         {
@@ -70,6 +56,21 @@
                target="_blank" rel="noopener">Porcino3D</a>
         </p>
     </aside>
+
+    <div class="stage">
+        <canvas id="viewport" @onmousemove="OnMouseMove" @onclick="OnClick"></canvas>
+
+        @if (_model is null && !_busy)
+        {
+            <div class="empty">
+                <p>STL-Datei laden, Kante anklicken, Radius eingeben.</p>
+                <p class="hint">Die Datei bleibt im Browser und wird nirgendwohin übertragen.</p>
+            </div>
+        }
+
+        <ProgressPanel Visible="_busy" Message="@_busyMessage" Step="_busyStep" Steps="_busySteps" />
+    </div>
+
 
     <RadiusDialog Visible="_chain is not null"
                   SegmentCount="_chain?.Count ?? 0"

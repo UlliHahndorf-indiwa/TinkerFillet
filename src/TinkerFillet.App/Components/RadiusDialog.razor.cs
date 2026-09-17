@@ -1,5 +1,7 @@
+using System.Runtime.Versioning;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using TinkerFillet.App.Interop;
 
 namespace TinkerFillet.App.Components;
 
@@ -10,10 +12,20 @@ namespace TinkerFillet.App.Components;
 /// the radius stays editable in the feature list afterwards - so the preview
 /// loop is the same mechanism as editing, not a second one beside it.
 /// </summary>
+[SupportedOSPlatform("browser")]
 public partial class RadiusDialog
 {
     private string _radiusText = "1";
     private string? _error;
+
+    /// <summary>
+    /// Whether the field has been given the caret since the dialog opened.
+    ///
+    /// The markup's autofocus attribute did nothing here: the browser honours
+    /// it for elements present when the page is parsed, and this dialog is put
+    /// into the page long afterwards.
+    /// </summary>
+    private bool _focused;
 
     [Parameter]
     public bool Visible { get; set; }
@@ -26,6 +38,20 @@ public partial class RadiusDialog
 
     [Parameter]
     public EventCallback Cancelled { get; set; }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!Visible)
+        {
+            _focused = false;
+            return;
+        }
+
+        if (_focused) return;
+
+        _focused = true;
+        PageBridge.FocusAndSelect("#radius");
+    }
 
     private async Task Confirm()
     {

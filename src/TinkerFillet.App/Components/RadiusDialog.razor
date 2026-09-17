@@ -9,8 +9,8 @@
                 Radius
                 @* Text, not number: a number field will not take a comma.
                    inputmode gets the numeric keypad on a phone anyway. *@
-                <input type="text" inputmode="decimal" @bind="_radiusText" @bind:event="oninput"
-                       @onkeydown="OnKey" autofocus />
+                <input id="radius" type="text" inputmode="decimal"
+                       @bind="_radiusText" @bind:event="oninput" @onkeydown="OnKey" />
                 mm
             </label>
             <p class="hint">Komma oder Punkt. Pfeiltasten ↑ ↓ ändern um @RadiusText.Format(RadiusText.Step) mm.</p>

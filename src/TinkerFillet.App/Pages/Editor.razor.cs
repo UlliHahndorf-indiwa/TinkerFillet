@@ -74,6 +74,7 @@ public partial class Editor : IAsyncDisposable
         if (!first) return;
 
         await OccBridge.ImportAsync(Navigation.BaseUri);
+        await PageBridge.ImportAsync(Navigation.BaseUri);
         OccBridge.AttachViewport("viewport");
         _kernel = new WorkerKernelSession();
         _session = new FilletSession(_kernel, Chain);
